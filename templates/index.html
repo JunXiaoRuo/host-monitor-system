@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主机巡视系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .dashboard-card {
+            border: none;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            transition: all 0.3s ease;
+        }
+        
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .server-status {
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .server-status.success {
+            background-color: #d1e7dd;
+            border: 1px solid #badbcc;
+            color: #0f5132;
+        }
+        
+        .server-status.warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffecb5;
+            color: #664d03;
+        }
+        
+        .server-status.failed {
+            background-color: #f8d7da;
+            border: 1px solid #f5c2c7;
+            color: #842029;
+        }
+        
+        .metric-card {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 1rem;
+        }
+        
+        .metric-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        .sidebar {
+            background-color: #f8f9fa;
+            min-height: calc(100vh - 56px);
+        }
+        
+        .sidebar .nav-link {
+            color: #495057;
+            border-radius: 0.5rem;
+            margin: 0.25rem 0;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .content-area {
+            padding: 2rem;
+        }
+        
+        .last-update {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-hdd-network"></i>
+                主机巡视系统
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="btn btn-success me-2" onclick="executeMonitor()">
+                            <i class="bi bi-play-circle"></i>
+                            立即巡视
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <span class="navbar-text me-3">
+                            <i class="bi bi-clock"></i>
+                            <span id="currentTime"></span>
+                        </span>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i>
+                            <span id="currentUsername">管理员</span>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="logout()">
+                                <i class="bi bi-box-arrow-right"></i>
+                                登出
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <nav class="col-md-2 d-md-block sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#dashboard" onclick="showSection('dashboard')">
+                                <i class="bi bi-speedometer2"></i>
+                                仪表板
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#servers" onclick="showSection('servers')">
+                                <i class="bi bi-hdd-stack"></i>
+                                服务器管理
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#schedules" onclick="showSection('schedules')">
+                                <i class="bi bi-calendar-event"></i>
+                                计划任务
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#services" onclick="showSection('services')">
+                                <i class="bi bi-gear"></i>
+                                服务配置
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#thresholds" onclick="showSection('thresholds')">
+                                <i class="bi bi-sliders"></i>
+                                阈值设置
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#reports" onclick="showSection('reports')">
+                                <i class="bi bi-file-text"></i>
+                                监控报告
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#logs" onclick="showSection('logs')">
+                                <i class="bi bi-list-ul"></i>
+                                监控日志
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#notifications" onclick="showSection('notifications')">
+                                <i class="bi bi-bell"></i>
+                                通知管理
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- 主内容区 -->
+            <main class="col-md-10 ms-sm-auto content-area">
+                <!-- 仪表板 -->
+                <div id="dashboard" class="section">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-speedometer2"></i> 仪表板</h2>
+                        <div class="last-update">
+                            最后更新: <span id="lastUpdateTime">-</span>
+                        </div>
+                    </div>
+
+                    <!-- 统计卡片 -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card metric-card dashboard-card">
+                                <div class="card-body text-center">
+                                    <div class="metric-number" id="totalServers">0</div>
+                                    <div>总服务器数</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card metric-card dashboard-card" style="background: linear-gradient(45deg, #56ab2f 0%, #a8e6cf 100%);">
+                                <div class="card-body text-center">
+                                    <div class="metric-number" id="successServers">0</div>
+                                    <div>正常服务器</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card metric-card dashboard-card" style="background: linear-gradient(45deg, #f7971e 0%, #ffd200 100%);">
+                                <div class="card-body text-center">
+                                    <div class="metric-number" id="warningServers">0</div>
+                                    <div>告警服务器</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card metric-card dashboard-card" style="background: linear-gradient(45deg, #c94b4b 0%, #4b134f 100%);">
+                                <div class="card-body text-center">
+                                    <div class="metric-number" id="failedServers">0</div>
+                                    <div>失败服务器</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 服务器状态列表 -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card dashboard-card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-hdd-network"></i>
+                                        服务器状态
+                                        <button class="btn btn-sm btn-outline-primary float-end" onclick="refreshDashboard()">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                            刷新
+                                        </button>
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="serverStatusList">
+                                        <div class="text-center text-muted">
+                                            <i class="bi bi-hourglass-split"></i>
+                                            加载中...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 服务器管理 -->
+                <div id="servers" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-hdd-stack"></i> 服务器管理</h2>
+                        <button class="btn btn-primary" onclick="showAddServerModal()">
+                            <i class="bi bi-plus-circle"></i>
+                            添加服务器
+                        </button>
+                    </div>
+
+                    <div class="card dashboard-card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>服务器名称</th>
+                                            <th>主机地址</th>
+                                            <th>端口</th>
+                                            <th>用户名</th>
+                                            <th>状态</th>
+                                            <th>最后监控</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="serversTableBody">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                加载中...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 计划任务 -->
+                <div id="schedules" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-calendar-event"></i> 计划任务</h2>
+                        <button class="btn btn-primary" onclick="showAddScheduleModal()">
+                            <i class="bi bi-plus-circle"></i>
+                            添加计划任务
+                        </button>
+                    </div>
+
+                    <div class="card dashboard-card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>任务名称</th>
+                                            <th>任务类型</th>
+                                            <th>调度配置</th>
+                                            <th>状态</th>
+                                            <th>下次执行</th>
+                                            <th>最后执行</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="schedulesTableBody">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                加载中...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 阈值设置 -->
+                <div id="thresholds" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-sliders"></i> 阈值设置</h2>
+                    </div>
+
+                    <div class="card dashboard-card">
+                        <div class="card-body">
+                            <form id="thresholdForm">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="cpuThreshold" class="form-label">CPU使用率阈值 (%)</label>
+                                            <input type="number" class="form-control" id="cpuThreshold" min="1" max="100" step="0.1">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="memoryThreshold" class="form-label">内存使用率阈值 (%)</label>
+                                            <input type="number" class="form-control" id="memoryThreshold" min="1" max="100" step="0.1">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            <label for="diskThreshold" class="form-label">磁盘使用率阈值 (%)</label>
+                                            <input type="number" class="form-control" id="diskThreshold" min="1" max="100" step="0.1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle"></i>
+                                    保存设置
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 监控报告 -->
+                <div id="reports" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-file-text"></i> 监控报告</h2>
+                        <button class="btn btn-success" onclick="generateReport()">
+                            <i class="bi bi-file-earmark-plus"></i>
+                            生成报告
+                        </button>
+                    </div>
+                    
+                    <!-- 筛选控件 -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row align-items-end">
+                                <div class="col-md-3">
+                                    <label for="reportTypeFilter" class="form-label">报告类型</label>
+                                    <select class="form-select" id="reportTypeFilter">
+                                        <option value="">所有类型</option>
+                                        <option value="manual">手动</option>
+                                        <option value="scheduled">定时</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="reportStartDate" class="form-label">开始日期</label>
+                                    <input type="date" class="form-control" id="reportStartDate">
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="reportEndDate" class="form-label">结束日期</label>
+                                    <input type="date" class="form-control" id="reportEndDate">
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-outline-primary" onclick="applyReportsFilter()">
+                                        <i class="bi bi-funnel"></i>
+                                        筛选
+                                    </button>
+                                    <button class="btn btn-outline-secondary ms-2" onclick="clearReportsFilter()">
+                                        <i class="bi bi-x-circle"></i>
+                                        清除
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 批量操作工具栏 -->
+                    <div class="d-flex justify-content-between align-items-center mb-3" id="reportsBulkToolbar" style="display: none !important;">
+                        <div class="text-muted">
+                            已选中 <span id="reportsSelectedCount">0</span> 个报告
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-danger" onclick="bulkDeleteReports()" id="reportsBulkDeleteBtn">
+                                <i class="bi bi-trash"></i>
+                                批量删除
+                            </button>
+                            <button class="btn btn-outline-secondary ms-2" onclick="clearReportsSelection()">
+                                <i class="bi bi-x-circle"></i>
+                                取消选择
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card dashboard-card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px;">
+                                                <input type="checkbox" id="reportsSelectAll" onchange="toggleAllReportsSelection()" title="全选">
+                                            </th>
+                                            <th>报告名称</th>
+                                            <th>类型</th>
+                                            <th>生成时间</th>
+                                            <th>文件大小</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="reportsTableBody">
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                加载中...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- 分页控件和信息 -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div>
+                                    <small class="text-muted" id="reportsPageInfo"></small>
+                                </div>
+                                <nav aria-label="报告分页">
+                                    <ul class="pagination mb-0" id="reportsPagination">
+                                        <!-- 分页按钮将由JavaScript动态生成 -->
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 监控日志 -->
+                <div id="logs" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-list-ul"></i> 监控日志</h2>
+                        <button class="btn btn-outline-primary" onclick="refreshLogs()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            刷新
+                        </button>
+                    </div>
+                    
+                    <!-- 筛选控件 -->
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row align-items-end">
+                                <div class="col-md-2">
+                                    <label for="logServerFilter" class="form-label">服务器</label>
+                                    <select class="form-select" id="logServerFilter">
+                                        <option value="">所有服务器</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="logStatusFilter" class="form-label">状态</label>
+                                    <select class="form-select" id="logStatusFilter">
+                                        <option value="">所有状态</option>
+                                        <option value="success">成功</option>
+                                        <option value="warning">告警</option>
+                                        <option value="failed">失败</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="logStartDate" class="form-label">开始日期</label>
+                                    <input type="date" class="form-control" id="logStartDate">
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="logEndDate" class="form-label">结束日期</label>
+                                    <input type="date" class="form-control" id="logEndDate">
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-outline-primary" onclick="applyLogsFilter()">
+                                        <i class="bi bi-funnel"></i>
+                                        筛选
+                                    </button>
+                                    <button class="btn btn-outline-secondary ms-2" onclick="clearLogsFilter()">
+                                        <i class="bi bi-x-circle"></i>
+                                        清除
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 批量操作工具栏 -->
+                    <div class="d-flex justify-content-between align-items-center mb-3" id="logsBulkToolbar" style="display: none !important;">
+                        <div class="text-muted">
+                            已选中 <span id="logsSelectedCount">0</span> 条记录
+                        </div>
+                        <div>
+                            <button class="btn btn-outline-danger" onclick="bulkDeleteLogs()" id="logsBulkDeleteBtn">
+                                <i class="bi bi-trash"></i>
+                                批量删除
+                            </button>
+                            <button class="btn btn-outline-secondary ms-2" onclick="clearLogsSelection()">
+                                <i class="bi bi-x-circle"></i>
+                                取消选择
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card dashboard-card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px;">
+                                                <input type="checkbox" id="logsSelectAll" onchange="toggleAllLogsSelection()" title="全选">
+                                            </th>
+                                            <th>时间</th>
+                                            <th>服务器</th>
+                                            <th>状态</th>
+                                            <th>CPU</th>
+                                            <th>内存</th>
+                                            <th>告警数</th>
+                                            <th>耗时</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="logsTableBody">
+                                        <tr>
+                                            <td colspan="9" class="text-center text-muted">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                加载中...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- 分页控件和信息 -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div>
+                                    <small class="text-muted" id="logsPageInfo"></small>
+                                </div>
+                                <nav aria-label="日志分页">
+                                    <ul class="pagination mb-0" id="logsPagination">
+                                        <!-- 分页按钮将由JavaScript动态生成 -->
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 通知管理 -->
+                <div id="notifications" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-bell"></i> 通知管理</h2>
+                        <button class="btn btn-primary" onclick="showAddNotificationModal()">
+                            <i class="bi bi-plus-circle"></i>
+                            添加通知通道
+                        </button>
+                    </div>
+
+                    <div class="card dashboard-card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>通道名称</th>
+                                            <th>Webhook URL</th>
+                                            <th>请求方式</th>
+                                            <th>状态</th>
+                                            <th>超时时间</th>
+                                            <th>创建时间</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="notificationsTableBody">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                加载中...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 服务配置 -->
+                <div id="services" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-gear"></i> 服务配置</h2>
+                    </div>
+
+                    <!-- 全局控制区域 -->
+                    <div class="card dashboard-card mb-4">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-4">
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-outline-primary" id="expandAllServicesBtn">
+                                            <i class="bi bi-arrows-expand"></i> 一键展开
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" id="collapseAllServicesBtn">
+                                            <i class="bi bi-arrows-collapse"></i> 一键关闭
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <button type="button" class="btn btn-primary" id="refreshServicesBtn">
+                                        <i class="bi bi-arrow-clockwise"></i> 刷新状态
+                                    </button>
+                                    <button type="button" class="btn btn-success ms-2" id="monitorAllServicesBtn">
+                                        <i class="bi bi-play-circle"></i> 立即监控
+                                    </button>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#serviceSettingsModal">
+                                        <i class="bi bi-gear"></i> 设置
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 服务器和服务列表 -->
+                    <div id="servicesContainer">
+                        <!-- 服务器列表将由JavaScript动态加载 -->
+                    </div>
+
+                    <!-- 加载提示 -->
+                    <div id="servicesLoadingIndicator" class="text-center py-4" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2">正在加载服务配置...</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 模态框包含区域 -->
+    <div id="modalContainer"></div>
+
+    <!-- 服务全局设置模态框 -->
+    <div class="modal fade" id="serviceSettingsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">全局设置</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="serviceSettingsForm">
+                        <div class="mb-3">
+                            <label for="monitorInterval" class="form-label">循环监控时间间隔</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="monitorInterval" min="1" max="1440" value="10">
+                                <span class="input-group-text">分钟</span>
+                            </div>
+                            <div class="form-text">设置自动监控服务的时间间隔（1-1440分钟）</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveServicesSettings()">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 自定义 JavaScript -->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

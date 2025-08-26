@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务配置 - 主机巡视系统</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .service-header {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .service-header:hover {
+            background: #e9ecef;
+        }
+        .service-list {
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            background: #fff;
+        }
+        .service-item {
+            padding: 12px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .service-item:last-child {
+            border-bottom: none;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .status-running {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-unknown {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .status-disabled {
+            background: #e2e3e5;
+            color: #6c757d;
+        }
+        .stats-badge {
+            margin-right: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+        }
+        .global-controls {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .server-container {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-server me-2"></i>主机巡视系统
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">
+                    <i class="fas fa-home"></i> 首页
+                </a>
+                <a class="nav-link" href="/logout">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-cogs me-2"></i>服务配置</h2>
+        </div>
+
+        <!-- 全局控制区域 -->
+        <div class="global-controls">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-primary" id="expandAllBtn">
+                            <i class="fas fa-expand-alt me-1"></i>一键展开
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="collapseAllBtn">
+                            <i class="fas fa-compress-alt me-1"></i>一键关闭
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <button type="button" class="btn btn-primary" id="refreshBtn">
+                        <i class="fas fa-refresh me-1"></i>刷新状态
+                    </button>
+                    <button type="button" class="btn btn-success ms-2" id="monitorAllBtn">
+                        <i class="fas fa-play me-1"></i>立即监控
+                    </button>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                        <i class="fas fa-cog me-1"></i>设置
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 服务器和服务列表 -->
+        <div id="serversContainer">
+            <!-- 服务器列表将由JavaScript动态加载 -->
+        </div>
+
+        <!-- 加载提示 -->
+        <div id="loadingIndicator" class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-2">正在加载服务配置...</p>
+        </div>
+    </div>
+
+    <!-- 服务编辑模态框 -->
+    <div class="modal fade" id="serviceModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">服务配置</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="serviceForm">
+                        <input type="hidden" id="serviceId">
+                        <input type="hidden" id="serverId">
+                        
+                        <div class="mb-3">
+                            <label for="serviceName" class="form-label">服务名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="serviceName" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="processName" class="form-label">进程名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="processName" required>
+                            <div class="form-text">程序将通过此进程名监控服务状态</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="isMonitoring" checked>
+                                <label class="form-check-label" for="isMonitoring">
+                                    启用监控
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="serviceDescription" class="form-label">服务描述</label>
+                            <textarea class="form-control" id="serviceDescription" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveServiceBtn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全局设置模态框 -->
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">全局设置</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="settingsForm">
+                        <div class="mb-3">
+                            <label for="monitorInterval" class="form-label">循环监控时间间隔</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="monitorInterval" min="1" max="1440" value="10">
+                                <span class="input-group-text">分钟</span>
+                            </div>
+                            <div class="form-text">设置自动监控服务的时间间隔（1-1440分钟）</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveSettingsBtn">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let serversData = [];
+        let expandedServers = new Set();
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadServersData();
+            bindEvents();
+            loadGlobalSettings();
+        });
+
+        // 绑定事件
+        function bindEvents() {
+            // 一键展开/关闭
+            document.getElementById('expandAllBtn').addEventListener('click', expandAll);
+            document.getElementById('collapseAllBtn').addEventListener('click', collapseAll);
+            
+            // 刷新和监控按钮
+            document.getElementById('refreshBtn').addEventListener('click', loadServersData);
+            document.getElementById('monitorAllBtn').addEventListener('click', monitorAllServices);
+            
+            // 保存按钮
+            document.getElementById('saveServiceBtn').addEventListener('click', saveService);
+            document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+        }
+
+        // 加载服务器数据
+        async function loadServersData() {
+            try {
+                showLoading(true);
+                const response = await fetch('/api/services/servers');
+                const data = await response.json();
+                
+                if (data.success) {
+                    serversData = data.data;
+                    renderServers();
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            } catch (error) {
+                console.error('加载服务器数据失败:', error);
+                showAlert('加载服务器数据失败', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // 渲染服务器列表
+        function renderServers() {
+            const container = document.getElementById('serversContainer');
+            
+            if (serversData.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle me-2"></i>
+                        暂无服务器配置，请先在<a href="/" class="alert-link">服务器管理</a>中添加服务器
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            
+            serversData.forEach(server => {
+                const isExpanded = expandedServers.has(server.id);
+                const expandIcon = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
+                
+                html += `
+                    <div class="server-container">
+                        <div class="service-header" onclick="toggleServer(${server.id})">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <h5 class="mb-1">
+                                        <i class="fas fa-server me-2"></i>${server.name}
+                                    </h5>
+                                    <small class="text-muted">${server.host}:${server.port}</small>
+                                </div>
+                                <div class="col-md-5">
+                                    <span class="stats-badge bg-primary text-white">总：${server.total_services}</span>
+                                    <span class="stats-badge bg-info text-white">监控：${server.monitoring_services}</span>
+                                    <span class="stats-badge bg-success text-white">正常：${server.normal_services}</span>
+                                    <span class="stats-badge bg-danger text-white">异常：${server.error_services}</span>
+                                </div>
+                                <div class="col-md-1 text-end">
+                                    <button class="btn btn-sm btn-outline-primary me-2" onclick="event.stopPropagation(); addService(${server.id})">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                    <i class="fas ${expandIcon}"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${isExpanded ? renderServices(server) : ''}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // 渲染服务列表
+        function renderServices(server) {
+            if (!server.services || server.services.length === 0) {
+                return `
+                    <div class="service-list">
+                        <div class="service-item text-center text-muted">
+                            <em>暂无服务配置</em>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            let html = '<div class="service-list">';
+            
+            server.services.forEach(service => {
+                const statusClass = getStatusClass(service.latest_status, service.is_monitoring);
+                const statusText = getStatusText(service.latest_status, service.is_monitoring);
+                
+                html += `
+                    <div class="service-item">
+                        <div>
+                            <strong>${service.service_name}</strong>
+                            <span class="status-badge ${statusClass} ms-2">${statusText}</span>
+                            <div class="small text-muted mt-1">
+                                进程: ${service.process_name}
+                                ${service.latest_process_count > 0 ? ` | 进程数: ${service.latest_process_count}` : ''}
+                            </div>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="editService(${service.id})">
+                                <i class="fas fa-edit"></i> 编辑
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteService(${service.id}, '${service.service_name}')">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            return html;
+        }
+
+        // 获取状态样式类
+        function getStatusClass(status, isMonitoring) {
+            if (!isMonitoring) return 'status-disabled';
+            
+            switch(status) {
+                case 'running': return 'status-running';
+                case 'stopped': return 'status-stopped';
+                case 'error': return 'status-error';
+                default: return 'status-unknown';
+            }
+        }
+
+        // 获取状态文本
+        function getStatusText(status, isMonitoring) {
+            if (!isMonitoring) return '关闭';
+            
+            switch(status) {
+                case 'running': return '正常';
+                case 'stopped': return '异常';
+                case 'error': return '异常';
+                default: return '未知';
+            }
+        }
+
+        // 切换服务器展开/折叠
+        function toggleServer(serverId) {
+            if (expandedServers.has(serverId)) {
+                expandedServers.delete(serverId);
+            } else {
+                expandedServers.add(serverId);
+            }
+            renderServers();
+        }
+
+        // 一键展开
+        function expandAll() {
+            serversData.forEach(server => {
+                expandedServers.add(server.id);
+            });
+            renderServers();
+        }
+
+        // 一键关闭
+        function collapseAll() {
+            expandedServers.clear();
+            renderServers();
+        }
+
+        // 添加服务
+        function addService(serverId) {
+            document.getElementById('serviceId').value = '';
+            document.getElementById('serverId').value = serverId;
+            document.getElementById('serviceName').value = '';
+            document.getElementById('processName').value = '';
+            document.getElementById('isMonitoring').checked = true;
+            document.getElementById('serviceDescription').value = '';
+            
+            document.querySelector('#serviceModal .modal-title').textContent = '添加服务';
+            
+            const modal = new bootstrap.Modal(document.getElementById('serviceModal'));
+            modal.show();
+        }
+
+        // 编辑服务
+        async function editService(serviceId) {
+            try {
+                const response = await fetch(`/api/services/${serviceId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const service = data.data;
+                    document.getElementById('serviceId').value = service.id;
+                    document.getElementById('serverId').value = service.server_id;
+                    document.getElementById('serviceName').value = service.service_name;
+                    document.getElementById('processName').value = service.process_name;
+                    document.getElementById('isMonitoring').checked = service.is_monitoring;
+                    document.getElementById('serviceDescription').value = service.description || '';
+                    
+                    document.querySelector('#serviceModal .modal-title').textContent = '编辑服务';
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('serviceModal'));
+                    modal.show();
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            } catch (error) {
+                console.error('获取服务信息失败:', error);
+                showAlert('获取服务信息失败', 'error');
+            }
+        }
+
+        // 保存服务
+        async function saveService() {
+            const serviceId = document.getElementById('serviceId').value;
+            const serverId = document.getElementById('serverId').value;
+            const serviceName = document.getElementById('serviceName').value.trim();
+            const processName = document.getElementById('processName').value.trim();
+            const isMonitoring = document.getElementById('isMonitoring').checked;
+            const description = document.getElementById('serviceDescription').value.trim();
+            
+            if (!serviceName || !processName) {
+                showAlert('请填写必填字段', 'warning');
+                return;
+            }
+            
+            const data = {
+                server_id: parseInt(serverId),
+                service_name: serviceName,
+                process_name: processName,
+                is_monitoring: isMonitoring,
+                description: description
+            };
+            
+            try {
+                const url = serviceId ? `/api/services/${serviceId}` : '/api/services';
+                const method = serviceId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('serviceModal')).hide();
+                    loadServersData();
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                console.error('保存服务失败:', error);
+                showAlert('保存服务失败', 'error');
+            }
+        }
+
+        // 删除服务
+        async function deleteService(serviceId, serviceName) {
+            if (!confirm(`确定要删除服务 "${serviceName}" 吗？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/services/${serviceId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    loadServersData();
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            } catch (error) {
+                console.error('删除服务失败:', error);
+                showAlert('删除服务失败', 'error');
+            }
+        }
+
+        // 监控所有服务
+        async function monitorAllServices() {
+            if (!confirm('确定要立即监控所有服务吗？这可能需要一些时间。')) {
+                return;
+            }
+            
+            try {
+                document.getElementById('monitorAllBtn').disabled = true;
+                document.getElementById('monitorAllBtn').innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>监控中...';
+                
+                const response = await fetch('/api/services/monitor/all', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert('服务监控完成', 'success');
+                    loadServersData();
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            } catch (error) {
+                console.error('监控服务失败:', error);
+                showAlert('监控服务失败', 'error');
+            } finally {
+                document.getElementById('monitorAllBtn').disabled = false;
+                document.getElementById('monitorAllBtn').innerHTML = '<i class="fas fa-play me-1"></i>立即监控';
+            }
+        }
+
+        // 加载全局设置
+        async function loadGlobalSettings() {
+            try {
+                const response = await fetch('/api/services/settings');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('monitorInterval').value = data.data.monitor_interval || 10;
+                }
+            } catch (error) {
+                console.error('加载全局设置失败:', error);
+            }
+        }
+
+        // 保存全局设置
+        async function saveSettings() {
+            const monitorInterval = document.getElementById('monitorInterval').value;
+            
+            if (!monitorInterval || monitorInterval < 1 || monitorInterval > 1440) {
+                showAlert('监控间隔必须在1-1440分钟之间', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/services/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        monitor_interval: parseInt(monitorInterval)
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide();
+                } else {
+                    showAlert(data.message, 'error');
+                }
+            } catch (error) {
+                console.error('保存设置失败:', error);
+                showAlert('保存设置失败', 'error');
+            }
+        }
+
+        // 显示加载状态
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+            document.getElementById('serversContainer').style.display = show ? 'none' : 'block';
+        }
+
+        // 显示提示信息
+        function showAlert(message, type = 'info') {
+            const alertClass = {
+                'success': 'alert-success',
+                'error': 'alert-danger',
+                'warning': 'alert-warning',
+                'info': 'alert-info'
+            }[type] || 'alert-info';
+            
+            const alertHtml = `
+                <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            // 在页面顶部显示提示
+            const alertContainer = document.querySelector('.container');
+            alertContainer.insertAdjacentHTML('afterbegin', alertHtml);
+            
+            // 自动隐藏成功提示
+            if (type === 'success') {
+                setTimeout(() => {
+                    const alert = alertContainer.querySelector('.alert');
+                    if (alert) {
+                        alert.remove();
+                    }
+                }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>
