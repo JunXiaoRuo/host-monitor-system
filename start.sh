@@ -34,20 +34,17 @@ fi
 echo "请选择运行模式:"
 echo "1) 开发模式 (启用控制台日志，便于调试)"
 echo "2) 生产模式 (禁用控制台日志，适合长期运行)"
-echo "3) 自动生产模式 (5秒后自动启动生产模式)"
 echo ""
 echo "5秒内未选择将自动启动生产模式..."
 echo ""
 
 # 设置5秒超时
-read -t 5 -p "请输入选择 (1/2/3): " mode_choice
+read -t 5 -p "请输入选择 (1/2): " mode_choice
 
-# 如果超时或选择3，则自动启动生产模式
-if [ $? -ne 0 ] || [ "$mode_choice" = "3" ]; then
+# 如果超时，则自动启动生产模式
+if [ $? -ne 0 ]; then
     echo ""
-    echo "⏰ 5秒后自动启动生产模式..."
-    sleep 5
-    echo "🚀 以生产模式启动..."
+    echo "🚀 5秒超时，以生产模式启动..."
     python3 start_production.py
 else
     case $mode_choice in
