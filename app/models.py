@@ -29,6 +29,7 @@ class Server(db.Model):
     
     # 关联关系
     monitor_logs = db.relationship('MonitorLog', backref='server', lazy=True, cascade='all, delete-orphan')
+    service_configs = db.relationship('ServiceConfig', backref='server', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -144,6 +145,7 @@ class MonitorLog(db.Model):
             'id': self.id,
             'server_id': self.server_id,
             'server_name': self.server.name if self.server else None,
+            'server_ip': self.server.host if self.server else None,
             'monitor_time': self.monitor_time.isoformat() if self.monitor_time else None,
             'status': self.status,
             'cpu_usage': self.cpu_usage,
@@ -275,7 +277,6 @@ class ServiceConfig(db.Model):
     updated_at = db.Column(db.DateTime, default=get_local_time, onupdate=get_local_time)
     
     # 关联关系
-    server = db.relationship('Server', backref='service_configs')
     service_logs = db.relationship('ServiceMonitorLog', backref='service_config', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):

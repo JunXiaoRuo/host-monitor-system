@@ -212,9 +212,27 @@ class ReportGenerator:
             margin-bottom: 15px;
         }
         
+        .server-name-section {
+            flex: 1;
+        }
+        
         .server-name {
             font-size: 1.3em;
             font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .server-ip {
+            color: #6c757d;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .server-ip i {
+            color: #007bff;
         }
         
         .server-status {
@@ -553,7 +571,12 @@ class ReportGenerator:
             {% for result in results %}
             <div class="server-item">
                 <div class="server-header">
-                    <div class="server-name">{{ result.server_name }}</div>
+                    <div class="server-name-section">
+                        <div class="server-name">{{ result.server_name }}</div>
+                        <div class="server-ip">
+                            <i class="fas fa-network-wired"></i> {{ result.server_ip }}
+                        </div>
+                    </div>
                     <div class="server-status status-{{ result.status }}">{{ result.status }}</div>
                 </div>
                 

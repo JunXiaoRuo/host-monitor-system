@@ -269,6 +269,60 @@ class ServiceMonitorService:
             logger.error(f"获取服务器服务统计失败: {str(e)}")
             return []
     
+    def monitor_single_service(self, service_id: int) -> Dict[str, Any]:
+        """
+        监控单个服务
+        
+        Args:
+            service_id: 服务ID
+            
+        Returns:
+            监控结果
+        """
+        try:
+            service_config = ServiceConfig.query.get(service_id)
+            if not service_config:
+                return {'success': False, 'message': '服务配置不存在'}
+            
+            if not service_config.is_monitoring:
+                return {'success': False, 'message': '该服务未启用监控'}
+            
+            server = service_config.server
+            if not server:
+                return {'success': False, 'message': '服务器不存在'}
+            
+            # 建立SSH连接
+            password = self.server_service._decrypt_password(server.password) if server.password else None
+            
+            with self.ssh_manager.get_connection(
+                host=server.host,
+                port=server.port,
+                username=server.username,
+                password=password,
+                private_key_path=server.private_key_path if server.private_key_path else None
+            ) as client:
+                
+                # 监控服务
+                service_result = self._monitor_single_service(client, service_config)
+                
+                # 保存监控结果
+                self._save_service_monitor_result(service_result)
+            
+            status_text = '正常' if service_result['status'] == 'running' else '异常'
+            message = f"服务 {service_config.service_name} 监控完成，状态: {status_text}"
+            
+            logger.info(f"服务 {service_config.service_name} 单个监控完成，状态: {service_result['status']}")
+            
+            return {
+                'success': True, 
+                'message': message,
+                'result': service_result
+            }
+            
+        except Exception as e:
+            logger.error(f"监控单个服务 {service_id} 失败: {str(e)}")
+            return {'success': False, 'message': f'监控失败: {str(e)}'}
+
     def monitor_server_services(self, server_id: int) -> Dict[str, Any]:
         """
         监控指定服务器的所有服务

@@ -285,13 +285,14 @@
                                             <th>端口</th>
                                             <th>用户名</th>
                                             <th>状态</th>
+                                            <th>服务数</th>
                                             <th>最后监控</th>
                                             <th>操作</th>
                                         </tr>
                                     </thead>
                                     <tbody id="serversTableBody">
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted">
+                                            <td colspan="8" class="text-center text-muted">
                                                 <i class="bi bi-hourglass-split"></i>
                                                 加载中...
                                             </td>
@@ -311,6 +312,19 @@
                             <i class="bi bi-plus-circle"></i>
                             添加计划任务
                         </button>
+                    </div>
+                    
+                    <!-- 提示信息 -->
+                    <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+                        <i class="bi bi-info-circle-fill me-3"></i>
+                        <div>
+                            <strong>提示：</strong>本界面配置仅适用于主机巡视定时任务，进程服务监控配置请前往左侧菜单
+                            <strong class="text-primary">
+                                <button class="btn btn-sm btn-outline-primary ms-2" onclick="showSection('services')">
+                                    <i class="bi bi-gear"></i> 服务配置
+                                </button>
+                            </strong> 功能
+                        </div>
                     </div>
 
                     <div class="card dashboard-card">
@@ -384,10 +398,16 @@
                 <div id="reports" class="section" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2><i class="bi bi-file-text"></i> 监控报告</h2>
-                        <button class="btn btn-success" onclick="generateReport()">
-                            <i class="bi bi-file-earmark-plus"></i>
-                            生成报告
-                        </button>
+                        <div>
+                            <button class="btn btn-outline-primary me-2" onclick="refreshReports()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                刷新
+                            </button>
+                            <button class="btn btn-success" onclick="generateReport()">
+                                <i class="bi bi-file-earmark-plus"></i>
+                                生成报告
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- 筛选控件 -->
@@ -562,6 +582,7 @@
                                             </th>
                                             <th>时间</th>
                                             <th>服务器</th>
+                                            <th>服务器IP</th>
                                             <th>状态</th>
                                             <th>CPU</th>
                                             <th>内存</th>
@@ -572,7 +593,7 @@
                                     </thead>
                                     <tbody id="logsTableBody">
                                         <tr>
-                                            <td colspan="9" class="text-center text-muted">
+                                            <td colspan="10" class="text-center text-muted">
                                                 <i class="bi bi-hourglass-split"></i>
                                                 加载中...
                                             </td>
@@ -671,6 +692,46 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- 异常服务概览 -->
+                    <div id="errorServicesOverview" class="alert alert-danger border-danger border-3 mb-4" style="display: none; background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%); box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);">
+                        <div class="d-flex align-items-center mb-3">
+                            <div class="me-3">
+                                <i class="bi bi-exclamation-triangle-fill" style="font-size: 2rem; color: #dc3545; animation: pulse 2s infinite;"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h4 class="alert-heading mb-1 text-danger">
+                                    <strong>⚠️ 异常服务警告</strong>
+                                    <span class="badge bg-danger ms-2 fs-6" id="errorServiceCount">0</span>
+                                </h4>
+                                <p class="mb-0 text-dark">检测到以下服务状态异常，请及时处理！</p>
+                            </div>
+                        </div>
+                        <div id="errorServicesList">
+                            <!-- 异常服务将由JavaScript动态加载 -->
+                        </div>
+                    </div>
+
+                    <style>
+                    @keyframes pulse {
+                        0% { transform: scale(1); }
+                        50% { transform: scale(1.1); }
+                        100% { transform: scale(1); }
+                    }
+                    .error-service-item {
+                        background: rgba(255, 255, 255, 0.9);
+                        border: 2px solid #dc3545;
+                        border-radius: 8px;
+                        padding: 15px;
+                        margin-bottom: 10px;
+                        box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
+                        transition: all 0.3s ease;
+                    }
+                    .error-service-item:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+                    }
+                    </style>
 
                     <!-- 服务器和服务列表 -->
                     <div id="servicesContainer">

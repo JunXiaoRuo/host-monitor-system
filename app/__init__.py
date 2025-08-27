@@ -285,6 +285,60 @@ def create_app(config_object='config.Config'):
             logger.error(f"获取仪表板数据失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
+    @app.route('/api/servers/with-services', methods=['GET'])
+    @login_required
+    def get_servers_with_service_stats():
+        """获取服务器列表及其服务统计信息"""
+        try:
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 20, type=int)
+            
+            # 获取服务器列表
+            result = server_service.get_server_list(page, per_page)
+            
+            # 为每个服务器添加服务统计信息
+            for server in result['servers']:
+                server_id = server['id']
+                
+                # 获取该服务器的服务统计
+                services = ServiceConfig.query.filter_by(server_id=server_id).all()
+                total_services = len(services)
+                monitoring_services = len([s for s in services if s.is_monitoring])
+                
+                # 获取最新状态统计
+                normal_count = 0
+                error_count = 0
+                
+                for service in services:
+                    if not service.is_monitoring:
+                        continue
+                    
+                    latest_log = ServiceMonitorLog.query.filter_by(
+                        service_config_id=service.id
+                    ).order_by(ServiceMonitorLog.monitor_time.desc()).first()
+                    
+                    if latest_log:
+                        if latest_log.status == 'running':
+                            normal_count += 1
+                        elif latest_log.status in ['stopped', 'error']:
+                            error_count += 1
+                
+                server.update({
+                    'total_services': total_services,
+                    'monitoring_services': monitoring_services,
+                    'normal_services': normal_count,
+                    'error_services': error_count
+                })
+            
+            return jsonify({
+                'success': True,
+                'data': result
+            })
+            
+        except Exception as e:
+            logger.error(f"获取服务器服务统计失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+
     @app.route('/api/servers', methods=['GET'])
     @login_required
     def get_servers():
@@ -325,6 +379,18 @@ def create_app(config_object='config.Config'):
             logger.error(f"创建服务器失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
+    @app.route('/api/servers/<int:server_id>/services', methods=['GET'])
+    @login_required
+    def get_server_services(server_id):
+        """获取指定服务器的服务列表"""
+        try:
+            services = service_monitor_service.get_services_by_server(server_id)
+            return jsonify({'success': True, 'data': services})
+            
+        except Exception as e:
+            logger.error(f"获取服务器服务列表失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+
     @app.route('/api/servers/<int:server_id>', methods=['PUT'])
     @login_required
     def update_server(server_id):
@@ -1024,14 +1090,7 @@ def create_app(config_object='config.Config'):
             logger.error(f"测试通知通道失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
-    # 服务配置页面路由
-    @app.route('/services')
-    @login_required
-    def services_page():
-        """服务配置页面"""
-        return render_template('services.html')
-    
-    # 服务监控管理路由
+    # 服务监控管理路由（API接口）
     @app.route('/api/services/servers', methods=['GET'])
     @login_required
     def get_servers_with_services():
@@ -1043,7 +1102,7 @@ def create_app(config_object='config.Config'):
         except Exception as e:
             logger.error(f"获取服务器服务信息失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
-    
+
     @app.route('/api/services', methods=['POST'])
     @login_required
     def create_service():
@@ -1136,6 +1195,18 @@ def create_app(config_object='config.Config'):
             logger.error(f"监控所有服务失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
+    @app.route('/api/services/monitor/single/<int:service_id>', methods=['POST'])
+    @login_required
+    def monitor_single_service(service_id):
+        """监控单个服务"""
+        try:
+            result = service_monitor_service.monitor_single_service(service_id)
+            return jsonify(result)
+            
+        except Exception as e:
+            logger.error(f"监控单个服务失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+
     @app.route('/api/services/monitor/<int:server_id>', methods=['POST'])
     @login_required
     def monitor_server_services(server_id):

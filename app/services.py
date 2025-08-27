@@ -276,7 +276,17 @@ class ServerService:
             
             server_name = server.name
             
-            # 删除相关的监控日志会通过级联删除自动处理
+            # 手动删除相关的服务配置（确保级联删除生效）
+            from app.models import ServiceConfig
+            service_configs = ServiceConfig.query.filter_by(server_id=server_id).all()
+            
+            if service_configs:
+                logger.info(f"开始删除服务器 {server_name} 的 {len(service_configs)} 个服务配置")
+                for config in service_configs:
+                    logger.info(f"删除服务配置: {config.service_name} (ID: {config.id})")
+                    db.session.delete(config)
+            
+            # 删除服务器（监控日志会通过级联删除自动处理）
             db.session.delete(server)
             db.session.commit()
             

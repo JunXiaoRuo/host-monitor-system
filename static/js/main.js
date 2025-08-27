@@ -189,7 +189,7 @@ function executeMonitor() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showAlert('监控执行成功', 'success');
+            showAlert('监控执行成功，请刷新页面', 'success');
             setTimeout(refreshDashboard, 2000);
         } else {
             showAlert('监控执行失败: ' + data.message, 'danger');
@@ -227,7 +227,8 @@ function showAlert(message, type) {
 
 // 加载服务器列表
 function loadServers() {
-    safeFetch('/api/servers')
+    // 使用包含服务统计的API
+    safeFetch('/api/servers/with-services')
         .then(response => response.json())
         .then(data => {
             if (data.success) {
@@ -252,7 +253,7 @@ function renderServersTable(servers) {
     if (!servers || servers.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center text-muted">
+                <td colspan="8" class="text-center text-muted">
                     <i class="bi bi-inbox"></i>
                     暂无服务器数据
                 </td>
@@ -266,6 +267,14 @@ function renderServersTable(servers) {
         const statusClass = server.status === 'active' ? 'success' : 'secondary';
         const statusText = server.status === 'active' ? '启用' : '禁用';
         
+        // 服务数统计显示
+        const totalServices = server.total_services || 0;
+        const errorServices = server.error_services || 0;
+        let serviceCountDisplay = `<span class="badge bg-info ms-1">总数:${totalServices}</span>`;
+        if (errorServices > 0) {
+            serviceCountDisplay += ` <span class="badge bg-danger ms-1">异常:${errorServices}</span>`;
+        }
+        
         html += `
             <tr>
                 <td>${server.name}</td>
@@ -275,10 +284,14 @@ function renderServersTable(servers) {
                 <td>
                     <span class="badge bg-${statusClass}">${statusText}</span>
                 </td>
+                <td>${serviceCountDisplay}</td>
                 <td>${server.updated_at ? new Date(server.updated_at).toLocaleString('zh-CN') : '-'}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-primary me-1" onclick="testConnection(${server.id})" title="测试连接">
                         <i class="bi bi-wifi"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-info me-1" onclick="showServerServicesModal(${server.id}, '${server.name}')" title="服务管理">
+                        <i class="bi bi-gear"></i>
                     </button>
                     <button class="btn btn-sm btn-outline-secondary me-1" onclick="editServer(${server.id})" title="编辑">
                         <i class="bi bi-pencil"></i>
@@ -531,6 +544,641 @@ function testConnection(serverId) {
     .finally(() => {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
+    });
+}
+
+// 显示服务器服务管理弹窗
+function showServerServicesModal(serverId, serverName) {
+    const modalHtml = `
+        <div class="modal fade" id="serverServicesModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-gear me-2"></i>服务管理 - ${serverName}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- 提示信息 -->
+                        <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+                            <i class="bi bi-info-circle-fill me-3"></i>
+                            <div>
+                                <strong>提示：</strong>更多配置管理，请使用左侧菜单中的 
+                                <strong class="text-primary">
+                                    <i class="bi bi-gear"></i> 服务配置
+                                </strong> 功能
+                            </div>
+                        </div>
+                        
+                        <!-- 控制按钮区域 -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <button type="button" class="btn btn-primary" onclick="addServerService(${serverId})">
+                                    <i class="bi bi-plus-circle"></i> 添加服务
+                                </button>
+                                <button type="button" class="btn btn-outline-success ms-2" onclick="monitorServerServices(${serverId})">
+                                    <i class="bi bi-play-circle"></i> 监控所有
+                                </button>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-outline-primary" onclick="refreshServerServices(${serverId})">
+                                    <i class="bi bi-arrow-clockwise"></i> 刷新
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- 服务列表 -->
+                        <div id="serverServicesList">
+                            <div class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <p class="mt-2">正在加载服务列表...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContainer').innerHTML = modalHtml;
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('serverServicesModal'));
+    modal.show();
+    
+    // 加载服务列表
+    loadServerServices(serverId);
+}
+
+// 加载服务器的服务列表
+function loadServerServices(serverId) {
+    safeFetch(`/api/servers/${serverId}/services`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderServerServicesList(data.data || [], serverId);
+            } else {
+                showServerServicesError('加载服务列表失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('加载服务列表失败:', error);
+            showServerServicesError('加载服务列表失败');
+        });
+}
+
+// 渲染服务器服务列表
+function renderServerServicesList(services, serverId) {
+    const container = document.getElementById('serverServicesList');
+    
+    if (!services || services.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-info text-center">
+                <i class="bi bi-info-circle me-2"></i>
+                该服务器暂无服务配置
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>服务名称</th>
+                        <th>进程名称</th>
+                        <th>状态</th>
+                        <th>进程数</th>
+                        <th>最后监控</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    services.forEach(service => {
+        const statusClass = getServiceStatusClass(service.latest_status, service.is_monitoring);
+        const statusText = getServiceStatusText(service.latest_status, service.is_monitoring);
+        const monitorTime = service.latest_monitor_time ? 
+            new Date(service.latest_monitor_time).toLocaleString('zh-CN') : '未监控';
+        
+        html += `
+            <tr>
+                <td>
+                    <strong>${service.service_name}</strong>
+                    ${!service.is_monitoring ? '<span class="badge bg-secondary ms-2">未启用</span>' : ''}
+                </td>
+                <td><code>${service.process_name}</code></td>
+                <td>
+                    <span class="badge ${statusClass}">${statusText}</span>
+                </td>
+                <td>${service.latest_process_count || 0}</td>
+                <td><small>${monitorTime}</small></td>
+                <td>
+                    <button class="btn btn-sm btn-outline-success me-1" onclick="monitorSingleServerService(${service.id})" title="监控">
+                        <i class="bi bi-play-circle"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editServerService(${service.id})" title="编辑">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteServerService(${service.id}, '${service.service_name}')" title="删除">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// 获取服务状态样式类
+function getServiceStatusClass(status, isMonitoring) {
+    if (!isMonitoring) return 'bg-secondary';
+    
+    switch(status) {
+        case 'running': return 'bg-success';
+        case 'stopped': return 'bg-warning';
+        case 'error': return 'bg-danger';
+        default: return 'bg-info';
+    }
+}
+
+// 获取服务状态文本
+function getServiceStatusText(status, isMonitoring) {
+    if (!isMonitoring) return '未启用';
+    
+    switch(status) {
+        case 'running': return '正常';
+        case 'stopped': return '停止';
+        case 'error': return '错误';
+        default: return '未知';
+    }
+}
+
+// 显示服务列表错误
+function showServerServicesError(message) {
+    const container = document.getElementById('serverServicesList');
+    container.innerHTML = `
+        <div class="alert alert-danger text-center">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            ${message}
+        </div>
+    `;
+}
+
+// 添加服务器服务
+function addServerService(serverId) {
+    // 确保服务器ID有效
+    if (!serverId) {
+        serverId = getCurrentServerIdFromModal();
+        if (!serverId) {
+            showAlert('无法获取服务器ID', 'danger');
+            return;
+        }
+    }
+    showServiceModal(null, serverId);
+}
+
+// 编辑服务器服务
+function editServerService(serviceId) {
+    console.log('开始编辑服务:', serviceId, typeof serviceId);
+    
+    // 确保 serviceId 是数字
+    const numericServiceId = parseInt(serviceId);
+    if (isNaN(numericServiceId)) {
+        showAlert('无效的服务ID', 'danger');
+        console.error('无效的服务ID:', serviceId);
+        return;
+    }
+    
+    // 直接通过API获取服务详情
+    safeFetch(`/api/services/${numericServiceId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const service = data.data;
+                console.log('获取到服务数据:', service);
+                
+                // 直接传递服务数据给模态框
+                showServiceModal(numericServiceId, service.server_id, service);
+            } else {
+                showAlert('获取服务信息失败: ' + data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('获取服务信息失败:', error);
+            showAlert('获取服务信息失败', 'danger');
+        });
+}
+
+// 删除服务器服务
+function deleteServerService(serviceId, serviceName) {
+    if (!confirm(`确定要删除服务 "${serviceName}" 吗？`)) {
+        return;
+    }
+    
+    safeFetch(`/api/services/${serviceId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('服务删除成功', 'success');
+            // 重新加载当前服务器的服务列表
+            const modalElement = document.getElementById('serverServicesModal');
+            if (modalElement) {
+                const serverId = getCurrentServerIdFromModal();
+                if (serverId) {
+                    loadServerServices(serverId);
+                }
+            }
+        } else {
+            showAlert('删除服务失败: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('删除服务失败:', error);
+        showAlert('删除服务失败', 'danger');
+    });
+}
+
+// 监控单个服务（在服务管理弹窗中）
+function monitorSingleServerService(serviceId) {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    btn.disabled = true;
+    
+    safeFetch(`/api/services/monitor/single/${serviceId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('服务监控完成', 'success');
+            // 重新加载当前服务器的服务列表
+            const serverId = getCurrentServerIdFromModal();
+            if (serverId) {
+                loadServerServices(serverId);
+            }
+        } else {
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('监控单个服务失败:', error);
+        showAlert('监控单个服务失败', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    });
+}
+
+// 监控服务器所有服务
+function monitorServerServices(serverId) {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 监控中...';
+    btn.disabled = true;
+    
+    safeFetch(`/api/services/monitor/${serverId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('服务器服务监控完成', 'success');
+            // 重新加载服务列表
+            loadServerServices(serverId);
+        } else {
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('监控服务器服务失败:', error);
+        showAlert('监控服务器服务失败', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    });
+}
+
+// 刷新服务器服务列表
+function refreshServerServices(serverId) {
+    loadServerServices(serverId);
+}
+
+// 从模态框中获取当前服务器ID
+function getCurrentServerIdFromModal() {
+    // 从按钮中提取serverId，这里简化处理，实际中可以使用更好的方法
+    const addBtn = document.querySelector('#serverServicesModal button[onclick*="addServerService"]');
+    if (addBtn) {
+        const match = addBtn.getAttribute('onclick').match(/addServerService\((\d+)\)/);
+        if (match) {
+            return parseInt(match[1]);
+        }
+    }
+    return null;
+}
+
+// 显示服务模态框（新增/编辑）
+function showServiceModal(serviceId = null, serverId = null, serviceData = null) {
+    const isEdit = serviceId !== null;
+    const title = isEdit ? '编辑服务' : '添加服务';
+    
+    // 如果没有传入serverId，尝试从当前弹窗获取
+    if (!serverId && !isEdit) {
+        serverId = getCurrentServerIdFromModal();
+    }
+    
+    const modalHtml = `
+        <div class="modal fade" id="serviceModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="serviceForm">
+                            <input type="hidden" id="serviceId" value="${serviceId || ''}">
+                            <input type="hidden" id="serviceServerId" value="${serverId || ''}">
+                            
+                            <div class="mb-3">
+                                <label for="serviceName" class="form-label">服务名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="serviceName" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="processName" class="form-label">进程名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="processName" required>
+                                <div class="form-text">程序将通过此进程名监控服务状态</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="isMonitoring" checked>
+                                    <label class="form-check-label" for="isMonitoring">
+                                        启用监控
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="serviceDescription" class="form-label">服务描述</label>
+                                <textarea class="form-control" id="serviceDescription" rows="3"></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="saveServiceFromModal()">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 将新模态框添加到页面中
+    const tempContainer = document.createElement('div');
+    tempContainer.innerHTML = modalHtml;
+    document.body.appendChild(tempContainer.firstElementChild);
+    
+    // 如果是编辑模式，填充数据
+    if (isEdit) {
+        if (serviceData) {
+            console.log('直接填充服务数据:', serviceData);
+            // 如果已有服务数据，延迟一点填充确保 DOM 元素完全创建
+            setTimeout(() => {
+                fillServiceFormData(serviceData);
+            }, 200); // 增加延迟时间
+        } else {
+            console.log('通过API加载服务数据');
+            // 否则通过API加载
+            setTimeout(() => {
+                loadServiceDataForEdit(serviceId);
+            }, 200); // 增加延迟时间
+        }
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('serviceModal'));
+    modal.show();
+    
+    // 模态框关闭时清理DOM
+    modal._element.addEventListener('hidden.bs.modal', function () {
+        modal._element.remove();
+    });
+}
+
+// 填充服务表单数据
+function fillServiceFormData(service) {
+    console.log('填充服务表单数据:', service);
+    
+    // 尝试多次查找元素，确保 DOM 元素存在
+    const tryFillData = (attempts = 0) => {
+        const serviceIdEl = document.getElementById('serviceId');
+        const serviceNameEl = document.getElementById('serviceName');
+        const processNameEl = document.getElementById('processName');
+        const isMonitoringEl = document.getElementById('isMonitoring');
+        const serviceDescriptionEl = document.getElementById('serviceDescription');
+        const serviceServerIdEl = document.getElementById('serviceServerId');
+        
+        // 检查关键元素是否存在
+        if (!serviceNameEl || !processNameEl) {
+            if (attempts < 5) {
+                console.log(`第 ${attempts + 1} 次尝试填充数据，元素尚未存在，等待 50ms...`);
+                setTimeout(() => tryFillData(attempts + 1), 50);
+                return;
+            } else {
+                console.error('多次尝试后仍无法找到必要的表单元素');
+                return;
+            }
+        }
+        
+        console.log('开始填充数据，元素已存在');
+        
+        if (serviceIdEl) {
+            serviceIdEl.value = service.id || '';
+            console.log('填充服务ID:', service.id);
+        } else {
+            console.warn('服务ID元素不存在');
+        }
+        
+        if (serviceNameEl) {
+            serviceNameEl.value = service.service_name || '';
+            console.log('填充服务名称:', service.service_name);
+        }
+        
+        if (processNameEl) {
+            processNameEl.value = service.process_name || '';
+            console.log('填充进程名称:', service.process_name);
+        }
+        
+        if (isMonitoringEl) {
+            isMonitoringEl.checked = service.is_monitoring !== false;
+            console.log('填充监控状态:', service.is_monitoring);
+        }
+        
+        if (serviceDescriptionEl) {
+            serviceDescriptionEl.value = service.description || '';
+            console.log('填充描述:', service.description);
+        }
+        
+        if (serviceServerIdEl) {
+            serviceServerIdEl.value = service.server_id || '';
+            console.log('填充服务器ID:', service.server_id);
+        } else {
+            console.warn('服务器ID元素不存在');
+        }
+        
+        console.log('数据填充完成');
+    };
+    
+    tryFillData();
+}
+
+// 加载服务数据用于编辑
+function loadServiceDataForEdit(serviceId) {
+    safeFetch(`/api/services/${serviceId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const service = data.data;
+                fillServiceFormData(service);
+            } else {
+                showAlert('加载服务数据失败: ' + data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('加载服务数据失败:', error);
+            showAlert('加载服务数据失败', 'danger');
+        });
+}
+
+// 从模态框保存服务
+function saveServiceFromModal() {
+    const serviceId = document.getElementById('serviceId').value;
+    const serverId = document.getElementById('serviceServerId').value;
+    const serviceName = document.getElementById('serviceName').value.trim();
+    const processName = document.getElementById('processName').value.trim();
+    const isMonitoring = document.getElementById('isMonitoring').checked;
+    const description = document.getElementById('serviceDescription').value.trim();
+    
+    console.log('保存服务数据:', {
+        serviceId: serviceId,
+        serverId: serverId,
+        serviceName: serviceName,
+        processName: processName,
+        isMonitoring: isMonitoring,
+        description: description
+    });
+    
+    if (!serviceName || !processName) {
+        showAlert('请填写必填字段', 'warning');
+        return;
+    }
+    
+    if (!serverId) {
+        showAlert('服务器ID不能为空', 'warning');
+        return;
+    }
+    
+    const data = {
+        server_id: parseInt(serverId),
+        service_name: serviceName,
+        process_name: processName,
+        is_monitoring: isMonitoring,
+        description: description
+    };
+    
+    // 确保 serviceId 是数字或空字符串
+    const numericServiceId = serviceId && serviceId.toString().trim() !== '' ? parseInt(serviceId) : null;
+    const url = numericServiceId ? `/api/services/${numericServiceId}` : '/api/services';
+    const method = numericServiceId ? 'PUT' : 'POST';
+    
+    console.log('请求信息:', {
+        url: url,
+        method: method,
+        serviceId: numericServiceId,
+        data: data
+    });
+    
+    // 禁用保存按钮，防止重复提交
+    const saveBtn = document.querySelector('#serviceModal .btn-primary');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 保存中...';
+    }
+    
+    safeFetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showAlert(result.message, 'success');
+            
+            // 关闭模态框
+            const serviceModal = bootstrap.Modal.getInstance(document.getElementById('serviceModal'));
+            if (serviceModal) {
+                serviceModal.hide();
+            }
+            
+            // 延迟刷新，确保模态框完全关闭后再刷新
+            setTimeout(() => {
+                // 检查是否在服务器服务管理弹窗中
+                const serverServicesModal = document.getElementById('serverServicesModal');
+                if (serverServicesModal && serverServicesModal.style.display !== 'none') {
+                    const currentServerId = getCurrentServerIdFromModal();
+                    if (currentServerId) {
+                        loadServerServices(currentServerId);
+                    }
+                }
+                
+                // 检查是否在服务配置页面
+                if (currentSection === 'services') {
+                    loadServices();
+                }
+                
+                // 检查是否在服务器管理页面
+                if (currentSection === 'servers') {
+                    loadServers();
+                }
+            }, 300);
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('保存服务失败:', error);
+        showAlert('保存服务失败', 'danger');
+    })
+    .finally(() => {
+        // 恢复保存按钮
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '保存';
+        }
     });
 }
 
@@ -1256,7 +1904,7 @@ function renderLogsTable(logs) {
     if (!logs || logs.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="text-center text-muted">
+                <td colspan="10" class="text-center text-muted">
                     <i class="bi bi-inbox"></i>
                     暂无日志数据
                 </td>
@@ -1277,6 +1925,7 @@ function renderLogsTable(logs) {
                 </td>
                 <td>${new Date(log.monitor_time).toLocaleString('zh-CN')}</td>
                 <td>${log.server_name}</td>
+                <td><code>${log.server_ip || 'N/A'}</code></td>
                 <td>
                     <span class="badge bg-${statusClass}">${log.status}</span>
                 </td>
@@ -1407,6 +2056,10 @@ function showLogDetailModal(logData) {
                                             <div class="col-8">
                                                 <span class="badge bg-${statusClass}">${logData.status}</span>
                                             </div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-4"><strong>服务器IP:</strong></div>
+                                            <div class="col-8"><code>${logData.server_ip || 'N/A'}</code></div>
                                         </div>
                                         <div class="row mb-2">
                                             <div class="col-4"><strong>监控时间:</strong></div>
@@ -1553,6 +2206,11 @@ function deleteLog(logId) {
 // 刷新日志
 function refreshLogs() {
     loadLogs(currentLogsPage, currentLogsFilters);
+}
+
+// 刷新报告
+function refreshReports() {
+    loadReports(currentReportsPage, currentReportsFilters);
 }
 
 // 渲染日志分页控件
@@ -2026,6 +2684,9 @@ function updateServicesOverview(servicesData) {
 // 渲染服务列表
 function renderServices() {
     const container = document.getElementById('servicesContainer');
+    const errorOverview = document.getElementById('errorServicesOverview');
+    const errorServicesList = document.getElementById('errorServicesList');
+    const errorServiceCount = document.getElementById('errorServiceCount');
     
     if (!servicesData || servicesData.length === 0) {
         container.innerHTML = `
@@ -2034,7 +2695,111 @@ function renderServices() {
                 暂无服务器配置，请先在<a href="#" onclick="showSection('servers')" class="alert-link">服务器管理</a>中添加服务器
             </div>
         `;
+        if (errorOverview) {
+            errorOverview.style.display = 'none';
+        }
         return;
+    }
+    
+    // 收集所有异常服务
+    let errorServices = [];
+    servicesData.forEach(server => {
+        if (server.services) {
+            server.services.forEach(service => {
+                if (service.is_monitoring && 
+                    (service.latest_status === 'stopped' || service.latest_status === 'error')) {
+                    errorServices.push({
+                        ...service,
+                        server_name: server.name,
+                        server_id: server.id,
+                        server_host: server.host,
+                        server_port: server.port
+                    });
+                }
+            });
+        }
+    });
+    
+    // 显示/隐藏异常服务概览
+    if (errorOverview && errorServicesList && errorServiceCount) {
+        if (errorServices.length > 0) {
+            errorOverview.style.display = 'block';
+            errorServiceCount.textContent = errorServices.length;
+            
+            let errorHtml = '';
+            errorServices.forEach(service => {
+                const statusText = service.latest_status === 'stopped' ? '异常' : '错误';
+                
+                // 格式化首次异常时间
+                const firstErrorTime = service.first_error_time ? 
+                    new Date(service.first_error_time).toLocaleString('zh-CN') : '未知';
+                
+                // 计算异常持续时间
+                let durationText = '';
+                if (service.first_error_time) {
+                    const errorDate = new Date(service.first_error_time);
+                    const now = new Date();
+                    const diffMs = now - errorDate;
+                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    const diffDays = Math.floor(diffHours / 24);
+                    
+                    if (diffDays > 0) {
+                        durationText = `已持续 ${diffDays} 天 ${diffHours % 24} 小时`;
+                    } else if (diffHours > 0) {
+                        durationText = `已持续 ${diffHours} 小时`;
+                    } else {
+                        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                        durationText = `已持续 ${diffMinutes} 分钟`;
+                    }
+                }
+                
+                errorHtml += `
+                    <div class="error-service-item mb-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-1 text-center">
+                                <i class="bi bi-exclamation-circle-fill" style="font-size: 2rem; color: #dc3545;"></i>
+                            </div>
+                            <div class="col-md-2">
+                                <h6 class="mb-1 text-danger">
+                                    <strong>${service.service_name}</strong>
+                                </h6>
+                                <span class="badge bg-danger">${statusText}</span>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-hdd-stack me-1"></i><strong>${service.server_name}</strong><br>
+                                    <i class="bi bi-router me-1"></i>${service.server_host}:${service.server_port}
+                                </small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-gear me-1"></i>进程: ${service.process_name}
+                                </small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-danger">
+                                    <i class="bi bi-clock-history me-1"></i><strong>首次异常:</strong><br>
+                                    ${firstErrorTime}<br>
+                                    ${durationText ? `<span class="text-warning">${durationText}</span>` : ''}
+                                </small>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <button class="btn btn-sm btn-danger me-2" onclick="editService(${service.id})" title="编辑服务">
+                                    <i class="bi bi-pencil"></i> 编辑
+                                </button>
+                                <button class="btn btn-sm btn-warning" onclick="monitorSingleService(${service.id})" title="重新检查">
+                                    <i class="bi bi-arrow-clockwise"></i> 重检
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            errorServicesList.innerHTML = errorHtml;
+        } else {
+            errorOverview.style.display = 'none';
+        }
     }
     
     let html = '';
@@ -2166,116 +2931,33 @@ function getServiceStatusText(status, isMonitoring) {
     }
 }
 
-// 添加服务
-function addService(serverId) {
-    showServiceModal('add', serverId);
-}
-
-// 编辑服务
-function editService(serviceId) {
-    showServiceModal('edit', null, serviceId);
-}
-
-// 显示服务配置模态框
-function showServiceModal(mode, serverId = null, serviceId = null) {
-    const modalHtml = `
-        <div class="modal fade" id="serviceModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">${mode === 'add' ? '添加服务' : '编辑服务'}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="serviceForm">
-                            <input type="hidden" id="serviceId" value="${serviceId || ''}">
-                            <input type="hidden" id="serverId" value="${serverId || ''}">
-                            
-                            <div class="mb-3">
-                                <label for="serviceName" class="form-label">服务名称 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="serviceName" required>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="processName" class="form-label">进程名称 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="processName" required>
-                                <div class="form-text">程序将通过此进程名监控服务状态</div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="isMonitoring" checked>
-                                    <label class="form-check-label" for="isMonitoring">
-                                        启用监控
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="serviceDescription" class="form-label">服务描述</label>
-                                <textarea class="form-control" id="serviceDescription" rows="3"></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                        <button type="button" class="btn btn-primary" onclick="saveService()">保存</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // 清除旧的模态框
-    const oldModal = document.getElementById('serviceModal');
-    if (oldModal) {
-        oldModal.remove();
-    }
-    
-    // 添加新的模态框
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // 如果是编辑模式，加载服务数据
-    if (mode === 'edit' && serviceId) {
-        loadServiceData(serviceId);
-    }
-    
-    // 显示模态框
-    currentServiceModal = new bootstrap.Modal(document.getElementById('serviceModal'));
-    currentServiceModal.show();
-}
-
-// 加载服务数据（编辑模式）
-function loadServiceData(serviceId) {
-    safeFetch(`/api/services/${serviceId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const service = data.data;
-                document.getElementById('serviceId').value = service.id;
-                document.getElementById('serverId').value = service.server_id;
-                document.getElementById('serviceName').value = service.service_name;
-                document.getElementById('processName').value = service.process_name;
-                document.getElementById('isMonitoring').checked = service.is_monitoring;
-                document.getElementById('serviceDescription').value = service.description || '';
-            } else {
-                showAlert('获取服务信息失败: ' + data.message, 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('获取服务信息失败:', error);
-            showAlert('获取服务信息失败', 'danger');
-        });
-}
-
 // 保存服务
 function saveService() {
     const serviceId = document.getElementById('serviceId').value;
-    const serverId = document.getElementById('serverId').value;
+    // 尝试获取两种可能的服务器ID字段
+    let serverId = document.getElementById('serverId') ? document.getElementById('serverId').value : null;
+    if (!serverId) {
+        serverId = document.getElementById('serviceServerId') ? document.getElementById('serviceServerId').value : null;
+    }
+    
     const serviceName = document.getElementById('serviceName').value.trim();
     const processName = document.getElementById('processName').value.trim();
     const isMonitoring = document.getElementById('isMonitoring').checked;
     const description = document.getElementById('serviceDescription').value.trim();
+    
+    console.log('保存服务数据:', {
+        serviceId: serviceId,
+        serverId: serverId,
+        serviceName: serviceName,
+        processName: processName,
+        isMonitoring: isMonitoring,
+        description: description
+    });
+    
+    if (!serverId) {
+        showAlert('服务器ID不能为空', 'warning');
+        return;
+    }
     
     if (!serviceName || !processName) {
         showAlert('请填写必填字段', 'warning');
@@ -2290,8 +2972,17 @@ function saveService() {
         description: description
     };
     
-    const url = serviceId ? `/api/services/${serviceId}` : '/api/services';
-    const method = serviceId ? 'PUT' : 'POST';
+    // 确保 serviceId 是数字或空字符串
+    const numericServiceId = serviceId && serviceId.toString().trim() !== '' ? parseInt(serviceId) : null;
+    const url = numericServiceId ? `/api/services/${numericServiceId}` : '/api/services';
+    const method = numericServiceId ? 'PUT' : 'POST';
+    
+    console.log('请求信息:', {
+        url: url,
+        method: method,
+        serviceId: numericServiceId,
+        data: data
+    });
     
     safeFetch(url, {
         method: method,
@@ -2307,6 +2998,212 @@ function saveService() {
             if (currentServiceModal) {
                 currentServiceModal.hide();
             }
+            loadServices();
+        } else {
+            showAlert(result.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('保存服务失败:', error);
+        showAlert('保存服务失败', 'danger');
+    });
+}
+
+// ========== 服务配置页面专用函数 ==========
+
+// 添加服务（服务配置页面专用）
+function addService(serverId) {
+    console.log('服务配置页面 - 添加服务:', serverId);
+    
+    if (!serverId) {
+        showAlert('无效的服务器ID', 'danger');
+        return;
+    }
+    
+    // 创建服务配置模态框
+    showServiceConfigModal(null, serverId);
+}
+
+// 编辑服务（服务配置页面专用）
+function editService(serviceId) {
+    console.log('服务配置页面 - 编辑服务:', serviceId, typeof serviceId);
+    
+    // 确保 serviceId 是数字
+    const numericServiceId = parseInt(serviceId);
+    if (isNaN(numericServiceId)) {
+        showAlert('无效的服务ID', 'danger');
+        console.error('无效的服务ID:', serviceId);
+        return;
+    }
+    
+    // 通过API获取服务详情
+    safeFetch(`/api/services/${numericServiceId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const service = data.data;
+                console.log('获取到服务数据:', service);
+                
+                // 创建编辑服务的模态框
+                showServiceConfigModal(numericServiceId, service.server_id, service);
+            } else {
+                showAlert('获取服务信息失败: ' + data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('获取服务信息失败:', error);
+            showAlert('获取服务信息失败', 'danger');
+        });
+}
+
+// 服务配置页面专用的模态框
+function showServiceConfigModal(serviceId = null, serverId = null, serviceData = null) {
+    const isEdit = serviceId !== null;
+    const title = isEdit ? '编辑服务' : '添加服务';
+    
+    const modalHtml = `
+        <div class="modal fade" id="serviceConfigModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">${title}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="serviceConfigForm">
+                            <input type="hidden" id="configServiceId" value="${serviceId || ''}">
+                            <input type="hidden" id="configServerId" value="${serverId || ''}">
+                            
+                            <div class="mb-3">
+                                <label for="configServiceName" class="form-label">服务名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="configServiceName" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="configProcessName" class="form-label">进程名称 <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="configProcessName" required>
+                                <div class="form-text">用于监控的进程名称，支持部分匹配</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="configIsMonitoring" checked>
+                                    <label class="form-check-label" for="configIsMonitoring">
+                                        启用监控
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="configServiceDescription" class="form-label">服务描述</label>
+                                <textarea class="form-control" id="configServiceDescription" rows="3"></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="saveServiceFromConfig()">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 移除已存在的模态框
+    const existingModal = document.getElementById('serviceConfigModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 将新模态框添加到页面中
+    const tempContainer = document.createElement('div');
+    tempContainer.innerHTML = modalHtml;
+    document.body.appendChild(tempContainer.firstElementChild);
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('serviceConfigModal'));
+    modal.show();
+    
+    // 如果是编辑模式，填充数据
+    if (isEdit && serviceData) {
+        setTimeout(() => {
+            fillServiceConfigFormData(serviceData);
+        }, 200);
+    }
+}
+
+// 填充服务配置表单数据
+function fillServiceConfigFormData(service) {
+    const serviceNameEl = document.getElementById('configServiceName');
+    const processNameEl = document.getElementById('configProcessName');
+    const isMonitoringEl = document.getElementById('configIsMonitoring');
+    const serviceDescriptionEl = document.getElementById('configServiceDescription');
+    
+    if (serviceNameEl) {
+        serviceNameEl.value = service.service_name || '';
+    }
+    
+    if (processNameEl) {
+        processNameEl.value = service.process_name || '';
+    }
+    
+    if (isMonitoringEl) {
+        isMonitoringEl.checked = service.is_monitoring || false;
+    }
+    
+    if (serviceDescriptionEl) {
+        serviceDescriptionEl.value = service.description || '';
+    }
+}
+
+// 从服务配置模态框保存服务
+function saveServiceFromConfig() {
+    const serviceId = document.getElementById('configServiceId').value;
+    const serverId = document.getElementById('configServerId').value;
+    const serviceName = document.getElementById('configServiceName').value.trim();
+    const processName = document.getElementById('configProcessName').value.trim();
+    const isMonitoring = document.getElementById('configIsMonitoring').checked;
+    const description = document.getElementById('configServiceDescription').value.trim();
+    
+    if (!serverId) {
+        showAlert('服务器ID不能为空', 'warning');
+        return;
+    }
+    
+    if (!serviceName || !processName) {
+        showAlert('请填写必填字段', 'warning');
+        return;
+    }
+    
+    const data = {
+        server_id: parseInt(serverId),
+        service_name: serviceName,
+        process_name: processName,
+        is_monitoring: isMonitoring,
+        description: description
+    };
+    
+    const numericServiceId = serviceId && serviceId.toString().trim() !== '' ? parseInt(serviceId) : null;
+    const url = numericServiceId ? `/api/services/${numericServiceId}` : '/api/services';
+    const method = numericServiceId ? 'PUT' : 'POST';
+    
+    safeFetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showAlert(result.message, 'success');
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('serviceConfigModal'));
+            if (modal) {
+                modal.hide();
+            }
+            // 刷新服务列表
             loadServices();
         } else {
             showAlert(result.message, 'danger');
@@ -2372,6 +3269,35 @@ function monitorAllServices() {
     })
     .finally(() => {
         btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+// 监控单个服务
+function monitorSingleService(serviceId) {
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 检查中...';
+    btn.disabled = true;
+    
+    safeFetch(`/api/services/monitor/single/${serviceId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('服务重检完成', 'success');
+            loadServices(); // 重新加载数据
+        } else {
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('监控单个服务失败:', error);
+        showAlert('监控单个服务失败', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalHtml;
         btn.disabled = false;
     });
 }
