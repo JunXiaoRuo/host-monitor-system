@@ -28,6 +28,7 @@ wheels/
 # PyInstaller
 *.manifest
 *.spec
+build/
 
 # 单元测试
 htmlcov/

@@ -141,14 +141,21 @@ python reset_password.py admin newpassword123
 │   ├── login.html              # 登录页面模板
 │   ├── setup.html              # 初始化设置页面
 │   └── services.html           # 服务配置页面模板
-├── static/js/                   # 前端静态资源
-│   └── main.js                 # 主要JavaScript逻辑
+├── static/                      # 静态资源文件
+│   └── js/
+│       └── main.js             # 主要JavaScript逻辑
 ├── instance/                    # Flask实例配置目录
 │   └── host_monitor.db         # SQLite数据库文件
 ├── reports/                     # 生成的监控报告
 │   ├── manual_report_*.html    # 手动执行的监控报告
 │   ├── scheduled_report_*.html # 计划任务生成的报告
 │   └── *.html                  # 其他监控报告文件
+├── logs/                        # 系统日志目录
+│   ├── run.log                 # 开发环境运行日志
+│   ├── production.log          # 生产环境运行日志
+│   ├── flask.log               # Flask应用日志
+│   ├── *-error.log             # 错误日志文件
+│   └── *-YYYYMMDD.log          # 按天分割的历史日志
 ├── config.py                    # 应用配置文件
 ├── requirements.txt             # Python依赖包列表
 ├── .env                         # 环境配置文件（包含敏感信息）
@@ -158,8 +165,10 @@ python reset_password.py admin newpassword123
 ├── start_production.py         # 生产环境启动脚本
 ├── reset_password.py           # 管理员密码重置工具
 ├── app_simple.py               # 简化版应用启动器
-├── host_monitor.log            # 系统运行日志
-└── README.md                   # 项目说明文档
+├── start.bat                   # Windows启动脚本
+├── start.sh                    # Linux/Mac启动脚本
+├── README.md                   # 项目说明文档
+└── LICENSE                     # 开源许可证文件
 ```
 
 ### 文件功能说明
@@ -776,17 +785,3 @@ ufw allow 5000
 1. 查看 `logs/` 目录下的日志文件
 2. 检查本文件中的故障排除部分
 3. 确认所有配置项正确设置
-
-## 🎉 开始使用
-
-现在您可以开始使用主机巡视系统了！
-
-1. 运行 `python run.py` 启动系统
-2. 访问 `http://localhost:5000` 进行初始化
-3. 添加您的服务器开始监控
-4. 配置告警阈值和通知方式
-5. 享受自动化的服务器监控体验
-
-如需技术支持，请查看 `logs/` 目录下的相关日志文件获取详细错误信息。
-
-**祝您使用愉快！** 🚀
