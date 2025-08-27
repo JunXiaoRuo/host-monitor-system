@@ -137,10 +137,16 @@ class HostMonitor:
                             'threshold': thresholds['cpu_threshold']
                         })
                 
-                # 获取内存使用率
-                memory_usage = self.ssh_manager.get_memory_usage(client)
-                if memory_usage is not None:
+                # 获取内存使用情况
+                memory_info = self.ssh_manager.get_memory_usage(client)
+                if memory_info is not None:
+                    # 保存详细内存信息
+                    monitor_result['memory_info'] = memory_info
+                    
+                    # 为了保持向后兼容，仍然保留memory_usage字段
+                    memory_usage = memory_info['usage_percent']
                     monitor_result['memory_usage'] = memory_usage
+                    
                     if memory_usage > thresholds['memory_threshold']:
                         monitor_result['alerts'].append({
                             'type': 'memory',
@@ -227,6 +233,10 @@ class HostMonitor:
                     monitor_log.set_disk_info(monitor_result['disk_info'])
                     monitor_log.set_system_info(monitor_result['system_info'])
                     monitor_log.set_alert_info(monitor_result['alerts'])
+                    
+                    # 设置内存详细信息
+                    if 'memory_info' in monitor_result and monitor_result['memory_info']:
+                        monitor_log.set_memory_info(monitor_result['memory_info'])
                     
                     session.add(monitor_log)
                     session.commit()
@@ -343,6 +353,7 @@ class HostMonitor:
                         'status': 'failed',
                         'cpu_usage': None,
                         'memory_usage': None,
+                        'memory_info': {},
                         'disk_info': [],
                         'system_info': {},
                         'alerts': [],

@@ -608,6 +608,49 @@ class ReportGenerator:
                         </div>
                         {% endif %}
                         
+                        {% if result.memory_info %}
+                        <div class="metric">
+                            <span class="metric-label">总内存:</span>
+                            <span class="metric-value">
+                                {% if result.memory_info.total_mb %}
+                                    {{ result.memory_info.total_mb }}MB ({{ result.memory_info.total_gb }}GB)
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">使用内存:</span>
+                            <span class="metric-value">
+                                {% if result.memory_info.used_mb %}
+                                    {{ result.memory_info.used_mb }}MB ({{ result.memory_info.used_gb }}GB)
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">空闲内存:</span>
+                            <span class="metric-value">
+                                {% if result.memory_info.free_mb %}
+                                    {{ result.memory_info.free_mb }}MB ({{ result.memory_info.free_gb }}GB)
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">可用内存:</span>
+                            <span class="metric-value">
+                                {% if result.memory_info.available_mb %}
+                                    {{ result.memory_info.available_mb }}MB ({{ result.memory_info.available_gb }}GB)
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                        
                         <div class="metric">
                             <span class="metric-label">执行耗时:</span>
                             <span class="metric-value">{{ "%.2f"|format(result.execution_time) }}秒</span>

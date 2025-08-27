@@ -347,6 +347,9 @@ class ServiceMonitorService:
             if not services:
                 return {'success': True, 'message': '没有需要监控的服务', 'results': []}
             
+            # 添加监控开始的日志
+            logger.info(f"开始监控服务器 {server.name}，共 {len(services)} 个服务")
+            
             results = []
             
             # 建立SSH连接
@@ -397,43 +400,91 @@ class ServiceMonitorService:
         }
         
         try:
-            # 使用ps命令查找进程
-            cmd = f"ps aux | grep '{service_config.process_name}' | grep -v grep"
+            # 使用ps命令查找进程，显式使用/bin/sh来避免shell兼容性问题
+            cmd = f"/bin/sh -c \"ps aux | grep '{service_config.process_name}' | grep -v grep\""
+            logger.info(f"执行命令: {cmd}")
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
             
             # 安全地解码输出，处理编码问题
             output_bytes = stdout.read()
+            logger.info(f"原始输出字节数: {len(output_bytes)}")
+            logger.info(f"原始输出字节内容: {output_bytes}")
+            
             try:
                 output = output_bytes.decode('utf-8').strip()
-            except UnicodeDecodeError:
+                logger.info(f"UTF-8解码成功: {repr(output)}")
+            except UnicodeDecodeError as e:
+                logger.warning(f"UTF-8解码失败: {e}")
                 try:
                     # 尝试使用gbk编码（中文系统常用）
                     output = output_bytes.decode('gbk').strip()
-                except UnicodeDecodeError:
+                    logger.info(f"GBK解码成功: {repr(output)}")
+                except UnicodeDecodeError as e2:
+                    logger.warning(f"GBK解码失败: {e2}")
                     # 如果都失败，使用错误忽略模式
                     output = output_bytes.decode('utf-8', errors='ignore').strip()
+                    logger.info(f"忽略错误解码: {repr(output)}")
             
             error_bytes = stderr.read()
+            logger.info(f"错误输出字节数: {len(error_bytes)}")
+            
             try:
                 error = error_bytes.decode('utf-8').strip()
+                if error:
+                    logger.warning(f"命令执行错误: {repr(error)}")
             except UnicodeDecodeError:
                 try:
                     error = error_bytes.decode('gbk').strip()
+                    if error:
+                        logger.warning(f"命令执行错误(GBK): {repr(error)}")
                 except UnicodeDecodeError:
                     error = error_bytes.decode('utf-8', errors='ignore').strip()
+                    if error:
+                        logger.warning(f"命令执行错误(忽略): {repr(error)}")
             
             if error:
-                result['status'] = 'error'
-                result['error_message'] = error
-                return result
+                # 检查是否是shell配置文件的非关键错误
+                non_critical_errors = [
+                    'then: then/endif not found',
+                    'if: Expression Syntax',
+                    'Badly placed ()',
+                    ': not found',
+                    ': Undefined variable',  # 环境变量未定义
+                    'LINX_PTS: Undefined variable',  # 特定的环境变量错误
+                    'No such file or directory',  # 配置文件不存在（部分情况）
+                    'Permission denied'  # 权限问题（部分情况）
+                ]
+                
+                is_critical_error = True
+                for non_critical in non_critical_errors:
+                    if non_critical in error:
+                        is_critical_error = False
+                        logger.warning(f"检测到非关键shell错误（已忽略）: {error}")
+                        break
+                
+                # 如果是关键错误，或者既有错误又没有有效输出，则报错
+                if is_critical_error or not output:
+                    result['status'] = 'error'
+                    result['error_message'] = error
+                    logger.error(f"SSH命令执行出错: {error}")
+                    return result
+                else:
+                    logger.info(f"忽略非关键错误，继续处理有效输出")
+            
+            logger.info(f"命令输出为空: {not output}，输出长度: {len(output) if output else 0}")
+            logger.info(f"输出内容: {repr(output)}")
             
             # 解析进程信息
             processes = []
             if output:
-                for line in output.split('\n'):
+                lines = output.split('\n')
+                logger.info(f"输出分割成 {len(lines)} 行")
+                for i, line in enumerate(lines):
+                    logger.info(f"第{i+1}行: {repr(line)}")
                     if line.strip():
                         # 解析ps输出
                         parts = line.split(None, 10)
+                        logger.info(f"分割结果: {parts}, 长度: {len(parts)}")
                         if len(parts) >= 11:
                             process_info = {
                                 'pid': parts[1],
@@ -442,14 +493,21 @@ class ServiceMonitorService:
                                 'command': parts[10]
                             }
                             processes.append(process_info)
+                            logger.info(f"添加进程信息: {process_info}")
+                        else:
+                            logger.warning(f"行格式不正确，字段数量不足: {len(parts)}")
             
             result['process_count'] = len(processes)
             result['process_info'] = processes
             
+            logger.info(f"最终统计: 找到 {len(processes)} 个进程")
+            
             if len(processes) > 0:
                 result['status'] = 'running'
+                logger.info(f"服务 {service_config.service_name} 状态: 运行中")
             else:
                 result['status'] = 'stopped'
+                logger.warning(f"服务 {service_config.service_name} 状态: 已停止 - 未找到匹配的进程")
             
             logger.debug(f"监控服务 {service_config.service_name}: {result['status']}, 进程数: {len(processes)}")
             
@@ -581,14 +639,11 @@ class ServiceMonitorService:
             
             if alerts:
                 content += "\n异常服务详情:\n"
-                for alert in alerts[:10]:  # 限制显示前10个异常
+                for alert in alerts:  # 显示所有异常服务
                     status_text = "已停止" if alert['status'] == 'stopped' else "监控失败"
                     # 添加IP地址信息
                     server_info = f"{alert['server_name']}({alert.get('server_ip', 'N/A')})"
                     content += f"- {server_info} | {alert['service_name']} | {status_text}\n"
-                
-                if len(alerts) > 10:
-                    content += f"... 还有 {len(alerts) - 10} 个异常服务\n"
             
             content += "\n更多内容可查看服务配置页面！"
             

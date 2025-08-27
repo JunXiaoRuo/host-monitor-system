@@ -110,6 +110,7 @@ class MonitorLog(db.Model):
     status = db.Column(db.String(20), comment='状态: success/failed/warning')
     cpu_usage = db.Column(db.Float, comment='CPU使用率')
     memory_usage = db.Column(db.Float, comment='内存使用率')
+    memory_info = db.Column(db.Text, comment='详细内存信息JSON')
     disk_info = db.Column(db.Text, comment='磁盘信息JSON')
     system_info = db.Column(db.Text, comment='系统信息JSON')
     alert_info = db.Column(db.Text, comment='告警信息JSON')
@@ -123,6 +124,14 @@ class MonitorLog(db.Model):
     
     def set_disk_info(self, disk_data):
         self.disk_info = json.dumps(disk_data)
+    
+    def get_memory_info(self):
+        if self.memory_info:
+            return json.loads(self.memory_info)
+        return {}
+    
+    def set_memory_info(self, memory_data):
+        self.memory_info = json.dumps(memory_data)
     
     def get_system_info(self):
         if self.system_info:
@@ -150,6 +159,7 @@ class MonitorLog(db.Model):
             'status': self.status,
             'cpu_usage': self.cpu_usage,
             'memory_usage': self.memory_usage,
+            'memory_info': self.get_memory_info(),
             'disk_info': self.get_disk_info(),
             'system_info': self.get_system_info(),
             'alert_info': self.get_alert_info(),

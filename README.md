@@ -135,7 +135,8 @@ python reset_password.py admin newpassword123
 │   ├── scheduler.py             # 任务调度器服务
 │   ├── ssh_manager.py           # SSH连接管理器
 │   ├── notification_service.py  # 通知推送服务
-│   └── report_generator.py      # 监控报告生成器
+│   ├── report_generator.py      # 监控报告生成器
+│   └── batch_import_service.py  # 批量导入服务
 ├── templates/                   # HTML模板文件
 │   ├── index.html              # 主页面模板（包含所有功能面板）
 │   ├── login.html              # 登录页面模板
@@ -150,12 +151,14 @@ python reset_password.py admin newpassword123
 │   ├── scheduled_report_*.html # 计划任务生成的报告
 │   └── *.html                  # 其他监控报告文件
 ├── logs/                        # 系统日志目录
-│   ├── run.log                 # 开发环境运行日志
-│   ├── production.log          # 生产环境运行日志
 │   ├── flask.log               # Flask应用日志
-│   ├── *-error.log             # 错误日志文件
-│   └── *-YYYYMMDD.log          # 按天分割的历史日志
+│   ├── flask-error.log         # Flask应用错误日志
+│   ├── run.log                 # 开发环境运行日志
+│   ├── run-error.log           # 开发环境错误日志
+│   ├── production.log          # 生产环境运行日志
+│   └── production-error.log    # 生产环境错误日志
 ├── config.py                    # 应用配置文件
+├── log_config.py                # 日志配置文件
 ├── requirements.txt             # Python依赖包列表
 ├── .env                         # 环境配置文件（包含敏感信息）
 ├── .env.example                 # 环境配置模板
@@ -173,42 +176,46 @@ python reset_password.py admin newpassword123
 ### 文件功能说明
 
 **核心模块 (app/)**:
-- **`__init__.py`** (49.7KB): Flask应用工厂，包含所有路由定义和API接口
-- **`models.py`** (15.4KB): 数据库模型定义，包含10个核心数据表
-- **`monitor.py`** (19.4KB): 主机监控核心功能，CPU/内存/磁盘监控
-- **`service_monitor.py`** (36.5KB): 服务进程监控功能，支持自定义进程名监控
-- **`scheduler.py`** (26.8KB): 任务调度器，支持每日/每周/每月计划任务
-- **`auth_service.py`** (7.8KB): 用户认证服务，密码加密和会话管理
-- **`notification_service.py`** (13.0KB): 通知推送服务，支持Webhook通知
-- **`report_generator.py`** (30.9KB): 监控报告生成器，生成HTML格式报告
-- **`ssh_manager.py`** (12.1KB): SSH连接管理器，支持密码和私钥认证
-- **`services.py`** (14.1KB): 业务逻辑服务层，封装数据库操作
+- **`__init__.py`**: Flask应用工厂，包含所有路由定义和API接口
+- **`models.py`**: 数据库模型定义，包含10个核心数据表
+- **`monitor.py`**: 主机监控核心功能，CPU/内存/磁盘监控
+- **`service_monitor.py`**: 服务进程监控功能，支持自定义进程名监控
+- **`scheduler.py`**: 任务调度器，支持每日/每周/每月计划任务
+- **`auth_service.py`**: 用户认证服务，密码加密和会话管理
+- **`notification_service.py`**: 通知推送服务，支持Webhook通知
+- **`report_generator.py`**: 监控报告生成器，生成HTML格式报告
+- **`ssh_manager.py`**: SSH连接管理器，支持密码和私钥认证
+- **`services.py`**: 业务逻辑服务层，封装数据库操作
+- **`batch_import_service.py`**: 批量导入服务，支持服务器和服务配置批量导入
 
 **前端文件**:
-- **`templates/index.html`** (37.0KB): 主页面模板，包含所有功能面板（含服务配置）
-- **`templates/login.html`** (6.8KB): 用户登录页面
-- **`templates/setup.html`** (12.0KB): 系统初始化设置页面
-- **`static/js/main.js`** (114.8KB): 前端主JavaScript逻辑
+- **`templates/index.html`**: 主页面模板，包含所有功能面板（含服务配置）
+- **`templates/login.html`**: 用户登录页面
+- **`templates/setup.html`**: 系统初始化设置页面
+- **`static/js/main.js`**: 前端主JavaScript逻辑
 
 **配置文件**:
-- **`config.py`** (1.7KB): 应用主配置，支持从环境变量读取配置
-- **`.env`** (新增): 环境配置文件，包含敏感信息（密钥、数据库、端口等）
-- **`.env.example`** (新增): 环境配置模板，不包含敏感信息
-- **`.gitignore`** (新增): Git忽略文件配置，排除敏感文件
-- **`requirements.txt`** (0.3KB): Python依赖包列表，新增python-dotenv支持
+- **`config.py`**: 应用主配置，支持从环境变量读取配置
+- **`log_config.py`**: 日志系统配置，支持按天分割和智能轮转
+- **`.env`**: 环境配置文件，包含敏感信息（密钥、数据库、端口等）
+- **`.env.example`**: 环境配置模板，不包含敏感信息
+- **`.gitignore`**: Git忽略文件配置，排除敏感文件
+- **`requirements.txt`**: Python依赖包列表，新增python-dotenv支持
 
 **启动脚本**:
-- **`run.py`** (1.6KB): 开发环境启动脚本，支持从.env读取配置
-- **`start_production.py`** (2.2KB): 生产环境启动脚本
-- **`app_simple.py`** (2.2KB): 简化版启动器，用于测试和调试
+- **`run.py`**: 开发环境启动脚本，支持从.env读取配置
+- **`start_production.py`**: 生产环境启动脚本，支持后台运行
+- **`app_simple.py`**: 简化版启动器，用于测试和调试
+- **`start.bat`**: Windows启动脚本，支持交互式选择运行模式
+- **`start.sh`**: Linux/Mac启动脚本，支持交互式选择运行模式
 
 **工具脚本**:
-- **`reset_password.py`** (12.5KB): 管理员密码重置工具，支持用户列表和密码修改
+- **`reset_password.py`**: 管理员密码重置工具，支持用户列表和密码修改
 
 **系统文件**:
-- **`instance/host_monitor.db`** (360KB): SQLite数据库，存储所有系统数据
-- **`host_monitor.log`** (935KB): 系统运行日志，记录所有操作和错误
-- **`reports/`**: 监控报告目录，存储生成的HTML报告文件
+- **`instance/host_monitor.db`**: SQLite数据库，存储所有系统数据
+- **`logs/`**: 系统日志目录，按天分割存储，支持错误日志分离
+- **`reports/`**: 监控报告存储目录，支持手动和自动报告生成
 
 ### 配置文件
 
@@ -234,9 +241,9 @@ vim .env  # 或使用其他编辑器
 | `DEBUG` | True | 调试模式 |
 | `DATABASE_URL` | SQLite | 数据库连接地址 |
 | `SSH_TIMEOUT` | 30 | SSH连接超时(秒) |
-| `DEFAULT_CPU_THRESHOLD` | 80.0 | CPU告警阈值(%) |
-| `DEFAULT_MEMORY_THRESHOLD` | 80.0 | 内存告警阈值(%) |
-| `DEFAULT_DISK_THRESHOLD` | 80.0 | 磁盘告警阈值(%) |
+| `DEFAULT_CPU_THRESHOLD` | 90.0 | CPU告警阈值(%) |
+| `DEFAULT_MEMORY_THRESHOLD` | 90.0 | 内存告警阈值(%) |
+| `DEFAULT_DISK_THRESHOLD` | 90.0 | 磁盘告警阈值(%) |
 
 **数据库配置示例**:
 ```bash
@@ -288,15 +295,95 @@ DATABASE_URL=postgresql://username:password@localhost:5432/host_monitor
    - 确认SSH服务运行正常
    - 检查网络连通性
 
-3. **通知发送失败**
+5. **通知发送失败**
    - 验证Webhook URL正确性
    - 检查网络连接
    - 查看日志文件错误信息
 
-4. **监控异常**
+6. **监控异常**
    - 检查被监控服务器SSH权限
    - 确认服务器系统命令可用
    - 查看 `host_monitor.log` 日志
+
+7. **SSH Shell兼容性错误**
+   系统已对常见的shell配置错误进行了智能处理，以下错误将被自动忽略：
+   
+   **已忽略的非关键错误**：
+   - `then: then/endif not found` - csh/tcsh shell语法错误
+   - `if: Expression Syntax` - shell表达式语法错误
+   - `Badly placed ()` - shell语法错误
+   - `: not found` - 缺少命令或文件
+   - `: Undefined variable` - 环境变量未定义
+   - `LINX_PTS: Undefined variable` - 特定环境变量错误
+   - `No such file or directory` - 配置文件不存在
+   - `Permission denied` - 权限问题（非关键情况）
+   
+   **如何工作**：
+   - 系统使用`/bin/sh -c`执行命令，避免不同shell的兼容性问题
+   - 当检测到上述错误时，如果同时有有效输出，将忽略错误继续处理
+   - 只有在关键错误或无效输出时才会报告失败
+   
+   **监控日志示例**：
+   ```
+   2025-08-27 21:44:56 - app.service_monitor - INFO - 开始监控服务器 Ⅲ区DAS主机，共 1 个服务
+   2025-08-27 21:44:57 - app.service_monitor - WARNING - 检测到非关键错误（已忽略）: LINX_PTS: Undefined variable.
+   2025-08-27 21:44:57 - app.service_monitor - INFO - 忽略非关键错误，继续处理有效输出
+   2025-08-27 21:44:58 - app.service_monitor - INFO - 服务器 Ⅲ区DAS主机 服务监控完成，监控了 1 个服务
+   ```
+
+   **用户自定义修改指导**：
+   
+   如果你遇到新的shell错误需要忽略，可以按以下步骤修改代码：
+   
+   1. **定位错误处理代码**：
+      编辑 `app/service_monitor.py` 文件，找到第443行附近的 `non_critical_errors` 列表。
+   
+   2. **添加新的错误模式**：
+      ```python
+      non_critical_errors = [
+          'then: then/endif not found',
+          'if: Expression Syntax',
+          'Badly placed ()',
+          ': not found',
+          ': Undefined variable',
+          'LINX_PTS: Undefined variable',
+          'No such file or directory',
+          'Permission denied',
+          # 在这里添加你的新错误模式
+          'your_new_error_pattern_here',
+      ]
+      ```
+   
+   3. **错误模式匹配原则**：
+      - 使用部分字符串匹配，不需要完整错误信息
+      - 如错误信息为 `bash: /usr/bin/id: No such file or directory`，只需添加 `'No such file or directory'`
+      - 如错误信息为 `csh: syntax error near unexpected token`，可以添加 `'syntax error'`
+   
+   4. **测试和验证**：
+      修改后重启系统，再次执行监控，查看日志中是否出现：
+      ```
+      WARNING - 检测到非关键错误（已忽略）: your_error_message
+      INFO - 忽略非关键错误，继续处理有效输出
+      ```
+   
+   5. **注意事项**：
+      - 只忽略真正非关键的错误（即有SSH输出但有shell配置错误）
+      - 不要忽略关键的系统错误（如真正的权限问题、命令不存在等）
+      - 建议先在测试环境中验证再应用到生产环境
+   
+   6. **高级配置**：
+      如果需要更精细的控制，可以修改错误判断逻辑（第456-465行）：
+      ```python
+      # 自定义错误判断逻辑
+      is_critical_error = True
+      for non_critical in non_critical_errors:
+          if non_critical in error:
+              # 可以在这里添加额外的条件判断
+              if some_additional_condition:
+                  is_critical_error = False
+                  logger.warning(f"检测到非关键错误（已忽略）: {error}")
+                  break
+      ```
 
 ### 日志管理
 
@@ -534,10 +621,19 @@ grep -r "SSH" logs/flask-*.log | tail -10
 
 ## 🆕 版本信息
 
-**当前版本**: v2.1
-**发布日期**: 2025-08-28
+**当前版本**: v2.2
+**发布日期**: 2025-08-27
 
 ### 更新内容
+
+#### v2.2 (2025-08-27)
+- ✅ 新增批量导入服务，支持服务器和服务配置批量导入
+- ✅ 新增服务器批量删除功能，支持多选操作
+- ✅ 优化一键检测结果显示，添加服务器名称和主机地址
+- ✅ 增强SSH Shell兼容性错误处理，智能忽略非关键错误
+- ✅ 新增监控开始日志，提供完整的监控过程记录
+- ✅ 新增log_config.py模块，优化日志系统配置
+- ✅ 更新README文档，添加详细的故障排除指南
 
 #### v2.1 (2025-08-28)
 - ✅ 修复日志轮转时文件命名不正确的问题
@@ -561,6 +657,9 @@ grep -r "SSH" logs/flask-*.log | tail -10
 - ✅ 灵活的通知配置和推送
 - ✅ 响应式Web界面设计
 - ✅ 正确的日志轮转和文件命名
+- ✅ 批量导入和批量删除功能
+- ✅ 智能SSH Shell错误处理
+- ✅ 完整的监控日志记录
 
 ### 技术亮点
 
@@ -569,6 +668,9 @@ grep -r "SSH" logs/flask-*.log | tail -10
 - 🛡️ **线程安全**: 完善的多线程监控机制，独立数据库会话
 - 📱 **响应式设计**: 支持移动端访问的现代化界面
 - 📋 **日志管理**: 按天分割的日志文件，正确的文件命名格式
+- 📥 **批量操作**: 支持服务器和服务批量导入、删除功能
+- 🛠️ **错误处理**: 智能SSH Shell兼容性错误处理，自动忽略非关键错误
+- 📊 **监控增强**: 完整的监控过程日志，从开始到结束
 
 ---
 

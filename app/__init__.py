@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_file, redirect,
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 from app.models import db, Server, MonitorLog, ScheduleTask, Threshold, MonitorReport, AdminUser, NotificationChannel, ServiceConfig, ServiceMonitorLog, GlobalSettings
 from app.services import ServerService, ThresholdService
+from app.batch_import_service import BatchImportService
 from app.auth_service import AuthService
 from app.notification_service import NotificationService
 from app.monitor import HostMonitor
@@ -57,6 +58,7 @@ def create_app(config_object='config.Config'):
     # 创建服务实例
     server_service = ServerService()
     threshold_service = ThresholdService()
+    batch_import_service = BatchImportService()
     auth_service = AuthService()
     notification_service = NotificationService()
     host_monitor = HostMonitor()
@@ -424,6 +426,29 @@ def create_app(config_object='config.Config'):
             logger.error(f"删除服务器失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
+    @app.route('/api/servers/bulk-delete', methods=['POST'])
+    @login_required
+    def bulk_delete_servers():
+        """批量删除服务器"""
+        try:
+            data = request.get_json()
+            server_ids = data.get('server_ids', [])
+            
+            success, message, result = server_service.bulk_delete_servers(server_ids)
+            
+            if success:
+                return jsonify({
+                    'success': True,
+                    'message': message,
+                    'data': result
+                })
+            else:
+                return jsonify({'success': False, 'message': message})
+                
+        except Exception as e:
+            logger.error(f"批量删除服务器失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
     @app.route('/api/servers/test', methods=['POST'])
     @login_required
     def test_server_connection():
@@ -453,6 +478,188 @@ def create_app(config_object='config.Config'):
             
         except Exception as e:
             logger.error(f"测试服务器连接失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    # 批量导入相关路由
+    @app.route('/api/servers/batch-test', methods=['POST'])
+    @login_required
+    def batch_test_servers():
+        """一键检测所有服务器连接"""
+        try:
+            data = request.get_json()
+            server_ids = data.get('server_ids', [])
+            
+            if not server_ids:
+                # 如果没有指定服务器ID，则测试所有活跃服务器
+                servers = server_service.get_active_servers()
+                server_ids = [s.id for s in servers]
+            
+            results = batch_import_service.test_server_connections(server_ids)
+            
+            # 统计结果
+            total_count = len(results)
+            success_count = sum(1 for r in results.values() if r['success'])
+            failed_count = total_count - success_count
+            
+            return jsonify({
+                'success': True,
+                'message': f'检测完成，成功 {success_count} 个，失败 {failed_count} 个',
+                'data': {
+                    'results': results,
+                    'summary': {
+                        'total': total_count,
+                        'success': success_count,
+                        'failed': failed_count
+                    }
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"批量测试服务器连接失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/servers/template/download')
+    @login_required
+    def download_server_template():
+        """下载服务器导入模板"""
+        try:
+            # 创建临时模板文件
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            template_path = os.path.join(temp_dir, '服务器导入模板.xlsx')
+            
+            success = batch_import_service.create_server_template(template_path)
+            if not success:
+                return jsonify({'success': False, 'message': '模板创建失败'})
+            
+            return send_file(
+                template_path,
+                as_attachment=True,
+                download_name='服务器导入模板.xlsx',
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            
+        except Exception as e:
+            logger.error(f"下载服务器模板失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/servers/batch-import', methods=['POST'])
+    @login_required
+    def batch_import_servers():
+        """批量导入服务器"""
+        try:
+            # 检查是否上传了文件
+            if 'file' not in request.files:
+                return jsonify({'success': False, 'message': '没有上传文件'})
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'success': False, 'message': '没有选择文件'})
+            
+            # 检查文件类型
+            if not file.filename.endswith('.xlsx'):
+                return jsonify({'success': False, 'message': '只支持.xlsx格式文件'})
+            
+            # 保存上传的文件
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            temp_path = os.path.join(temp_dir, file.filename)
+            file.save(temp_path)
+            
+            try:
+                # 解析Excel文件
+                success, message, servers = batch_import_service.parse_server_excel(temp_path)
+                if not success:
+                    return jsonify({'success': False, 'message': message})
+                
+                # 批量导入服务器
+                success, message, result = batch_import_service.import_servers(servers)
+                
+                return jsonify({
+                    'success': success,
+                    'message': message,
+                    'data': result
+                })
+                
+            finally:
+                # 清理临时文件
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            
+        except Exception as e:
+            logger.error(f"批量导入服务器失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/services/template/download')
+    @login_required
+    def download_service_template():
+        """下载服务配置导入模板"""
+        try:
+            # 创建临时模板文件
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            template_path = os.path.join(temp_dir, '服务配置导入模板.xlsx')
+            
+            success = batch_import_service.create_service_template(template_path)
+            if not success:
+                return jsonify({'success': False, 'message': '模板创建失败'})
+            
+            return send_file(
+                template_path,
+                as_attachment=True,
+                download_name='服务配置导入模板.xlsx',
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            
+        except Exception as e:
+            logger.error(f"下载服务配置模板失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/services/batch-import', methods=['POST'])
+    @login_required
+    def batch_import_services():
+        """批量导入服务配置"""
+        try:
+            # 检查是否上传了文件
+            if 'file' not in request.files:
+                return jsonify({'success': False, 'message': '没有上传文件'})
+            
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'success': False, 'message': '没有选择文件'})
+            
+            # 检查文件类型
+            if not file.filename.endswith('.xlsx'):
+                return jsonify({'success': False, 'message': '只支持.xlsx格式文件'})
+            
+            # 保存上传的文件
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            temp_path = os.path.join(temp_dir, file.filename)
+            file.save(temp_path)
+            
+            try:
+                # 解析Excel文件
+                success, message, services = batch_import_service.parse_service_excel(temp_path)
+                if not success:
+                    return jsonify({'success': False, 'message': message})
+                
+                # 批量导入服务配置
+                success, message, result = batch_import_service.import_services(services)
+                
+                return jsonify({
+                    'success': success,
+                    'message': message,
+                    'data': result
+                })
+                
+            finally:
+                # 清理临时文件
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            
+        except Exception as e:
+            logger.error(f"批量导入服务配置失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
     @app.route('/api/monitor/execute', methods=['POST'])

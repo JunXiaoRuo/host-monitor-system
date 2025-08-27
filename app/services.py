@@ -298,6 +298,77 @@ class ServerService:
             logger.error(f"删除服务器失败: {str(e)}")
             return False, f"删除服务器失败: {str(e)}"
     
+    def bulk_delete_servers(self, server_ids: List[int]) -> Tuple[bool, str, Dict]:
+        """
+        批量删除服务器
+        
+        Args:
+            server_ids: 服务器ID列表
+            
+        Returns:
+            (success, message, result_dict)
+        """
+        try:
+            if not server_ids:
+                return False, "请选择要删除的服务器", {}
+            
+            # 验证所有ID都是整数
+            try:
+                server_ids = [int(server_id) for server_id in server_ids]
+            except (ValueError, TypeError):
+                return False, "无效的服务器ID", {}
+            
+            # 查找存在的服务器
+            servers = Server.query.filter(Server.id.in_(server_ids)).all()
+            
+            if not servers:
+                return False, "找不到指定的服务器", {}
+            
+            deleted_count = len(servers)
+            deleted_servers = []
+            deleted_services_count = 0
+            
+            # 批量删除
+            from app.models import ServiceConfig
+            for server in servers:
+                server_info = {
+                    'id': server.id,
+                    'name': server.name,
+                    'host': server.host
+                }
+                deleted_servers.append(server_info)
+                
+                # 手动删除相关的服务配置
+                service_configs = ServiceConfig.query.filter_by(server_id=server.id).all()
+                
+                if service_configs:
+                    logger.info(f"删除服务器 {server.name} 的 {len(service_configs)} 个服务配置")
+                    for config in service_configs:
+                        logger.info(f"删除服务配置: {config.service_name} (ID: {config.id})")
+                        db.session.delete(config)
+                        deleted_services_count += 1
+                
+                # 删除服务器（监控日志会通过级联删除自动处理）
+                logger.info(f"删除服务器: {server.name} (ID: {server.id})")
+                db.session.delete(server)
+            
+            db.session.commit()
+            
+            result = {
+                'deleted_count': deleted_count,
+                'deleted_servers': deleted_servers,
+                'deleted_services_count': deleted_services_count
+            }
+            
+            logger.info(f"批量删除服务器成功: {deleted_count}个服务器, {deleted_services_count}个服务配置")
+            
+            return True, f"成功删除 {deleted_count} 个服务器及 {deleted_services_count} 个相关服务配置", result
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"批量删除服务器失败: {str(e)}")
+            return False, f"批量删除服务器失败: {str(e)}", {}
+    
     def test_server_connection(self, server_id: int) -> Tuple[bool, str]:
         """
         测试服务器连接
@@ -330,6 +401,47 @@ class ServerService:
         except Exception as e:
             logger.error(f"测试服务器连接失败: {str(e)}")
             return False, f"测试连接失败: {str(e)}"
+    
+    def test_connection(self, server_id: int) -> Tuple[bool, str, float]:
+        """
+        测试服务器连接并返回响应时间
+        
+        Args:
+            server_id: 服务器ID
+            
+        Returns:
+            (success, message, response_time)
+        """
+        import time
+        
+        try:
+            server = Server.query.get(server_id)
+            if not server:
+                return False, "服务器不存在", 0.0
+            
+            # 解密密码
+            password = self._decrypt_password(server.password) if server.password else None
+            
+            # 记录开始时间
+            start_time = time.time()
+            
+            # 测试连接
+            success, message = self.ssh_manager.test_connection(
+                host=server.host,
+                port=server.port,
+                username=server.username,
+                password=password,
+                private_key_path=server.private_key_path if server.private_key_path else None
+            )
+            
+            # 计算响应时间
+            response_time = time.time() - start_time
+            
+            return success, message, response_time
+            
+        except Exception as e:
+            logger.error(f"测试服务器连接失败: {str(e)}")
+            return False, f"测试连接失败: {str(e)}", 0.0
     
     def get_active_servers(self) -> List[Server]:
         """

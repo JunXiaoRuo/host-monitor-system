@@ -265,23 +265,61 @@ class SSHConnectionManager:
         
         return None
     
-    def get_memory_usage(self, client: paramiko.SSHClient) -> Optional[float]:
+    def get_memory_usage(self, client: paramiko.SSHClient) -> Optional[Dict]:
         """
-        获取内存使用率
+        获取内存使用情况
         
         Args:
             client: SSH客户端
             
         Returns:
-            内存使用率百分比
+            内存使用情况字典，包含使用率、总内存、使用内存、空闲内存
         """
         try:
+            # 使用free命令获取详细内存信息
+            command = "free -m | grep Mem | awk '{print $2,$3,$4,$7}'"
+            result = self.execute_command(client, command, timeout=10)
+            
+            if result['success'] and result['stdout'].strip():
+                parts = result['stdout'].strip().split()
+                if len(parts) >= 4:
+                    total_mb = int(parts[0])
+                    used_mb = int(parts[1])
+                    free_mb = int(parts[2])
+                    available_mb = int(parts[3])
+                    
+                    # 计算使用率（使用已用内存除以总内存）
+                    usage_percent = (used_mb / total_mb) * 100.0
+                    
+                    return {
+                        'usage_percent': round(usage_percent, 2),
+                        'total_mb': total_mb,
+                        'used_mb': used_mb,
+                        'free_mb': free_mb,
+                        'available_mb': available_mb,
+                        'total_gb': round(total_mb / 1024, 2),
+                        'used_gb': round(used_mb / 1024, 2),
+                        'free_gb': round(free_mb / 1024, 2),
+                        'available_gb': round(available_mb / 1024, 2)
+                    }
+            
+            # 备用方法：只获取使用率
             command = "free | grep Mem | awk '{printf \"%.2f\", $3/$2 * 100.0}'"
             result = self.execute_command(client, command, timeout=10)
             
             if result['success'] and result['stdout'].strip():
-                memory_usage = float(result['stdout'].strip())
-                return memory_usage
+                usage_percent = float(result['stdout'].strip())
+                return {
+                    'usage_percent': usage_percent,
+                    'total_mb': None,
+                    'used_mb': None,
+                    'free_mb': None,
+                    'available_mb': None,
+                    'total_gb': None,
+                    'used_gb': None,
+                    'free_gb': None,
+                    'available_gb': None
+                }
             
         except Exception as e:
             logger.error(f"获取内存使用率失败: {str(e)}")

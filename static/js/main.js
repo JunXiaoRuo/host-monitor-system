@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
     getCurrentUser(); // 获取当前用户信息
     initDashboard();
     initEventListeners();
+    loadThresholds(); // 初始化时加载阈值数据，确保监控日志详情弹窗能使用正确阈值
     setInterval(refreshDashboard, 30000);
 });
 
@@ -253,7 +254,7 @@ function renderServersTable(servers) {
     if (!servers || servers.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center text-muted">
+                <td colspan="9" class="text-center text-muted">
                     <i class="bi bi-inbox"></i>
                     暂无服务器数据
                 </td>
@@ -277,6 +278,9 @@ function renderServersTable(servers) {
         
         html += `
             <tr>
+                <td>
+                    <input type="checkbox" class="server-checkbox" value="${server.id}" onchange="updateServersSelection()">
+                </td>
                 <td>${server.name}</td>
                 <td>${server.host}</td>
                 <td>${server.port}</td>
@@ -305,6 +309,9 @@ function renderServersTable(servers) {
     });
     
     tbody.innerHTML = html;
+    
+    // 重置选择状态
+    clearServersSelection();
 }
 
 // 显示添加服务器模态框
@@ -1586,9 +1593,21 @@ function loadThresholds() {
         .then(data => {
             if (data.success) {
                 thresholdsData = data.data;
-                document.getElementById('cpuThreshold').value = data.data.cpu_threshold;
-                document.getElementById('memoryThreshold').value = data.data.memory_threshold;
-                document.getElementById('diskThreshold').value = data.data.disk_threshold;
+                
+                // 只有在阈值设置页面时才更新DOM元素
+                const cpuThresholdElement = document.getElementById('cpuThreshold');
+                const memoryThresholdElement = document.getElementById('memoryThreshold');
+                const diskThresholdElement = document.getElementById('diskThreshold');
+                
+                if (cpuThresholdElement) {
+                    cpuThresholdElement.value = data.data.cpu_threshold;
+                }
+                if (memoryThresholdElement) {
+                    memoryThresholdElement.value = data.data.memory_threshold;
+                }
+                if (diskThresholdElement) {
+                    diskThresholdElement.value = data.data.disk_threshold;
+                }
             } else {
                 showAlert('加载阈值配置失败: ' + data.message, 'danger');
             }
@@ -1970,6 +1989,7 @@ function viewLogDetail(logId) {
 
 // 显示日志详情模态框
 function showLogDetailModal(logData) {
+    
     const statusClass = logData.status === 'success' ? 'success' : 
                        logData.status === 'warning' ? 'warning' : 'danger';
     
@@ -1990,7 +2010,11 @@ function showLogDetailModal(logData) {
                 </thead>
                 <tbody>
                     ${logData.disk_info.map(disk => `
-                        <tr ${disk.use_percent > 80 ? 'class="table-warning"' : ''}>
+                        <tr ${(() => {
+                            const diskThreshold = thresholdsData?.disk_threshold || 80;
+                            const isOverThreshold = disk.use_percent > diskThreshold;
+                            return isOverThreshold ? 'class="table-warning"' : '';
+                        })()}>
                             <td>${disk.filesystem}</td>
                             <td>${disk.mounted_on}</td>
                             <td>${disk.size}</td>
@@ -2088,7 +2112,11 @@ function showLogDetailModal(logData) {
                                             <div class="col-4"><strong>CPU使用率:</strong></div>
                                             <div class="col-8">
                                                 ${logData.cpu_usage ? `
-                                                    <span class="${logData.cpu_usage > 80 ? 'text-danger' : ''}">
+                                                    <span class="${(() => {
+                                                        const cpuThreshold = thresholdsData?.cpu_threshold || 80;
+                                                        const isOverThreshold = logData.cpu_usage > cpuThreshold;
+                                                        return isOverThreshold ? 'text-danger' : '';
+                                                    })()}">
                                                         ${logData.cpu_usage.toFixed(1)}%
                                                     </span>
                                                 ` : 'N/A'}
@@ -2098,12 +2126,54 @@ function showLogDetailModal(logData) {
                                             <div class="col-4"><strong>内存使用率:</strong></div>
                                             <div class="col-8">
                                                 ${logData.memory_usage ? `
-                                                    <span class="${logData.memory_usage > 80 ? 'text-danger' : ''}">
+                                                    <span class="${(() => {
+                                                        const memoryThreshold = thresholdsData?.memory_threshold || 80;
+                                                        const isOverThreshold = logData.memory_usage > memoryThreshold;
+                                                        return isOverThreshold ? 'text-danger' : '';
+                                                    })()}">
                                                         ${logData.memory_usage.toFixed(1)}%
                                                     </span>
                                                 ` : 'N/A'}
                                             </div>
                                         </div>
+                                        ${logData.memory_info ? `
+                                        <div class="row mb-2">
+                                            <div class="col-4"><strong>总内存:</strong></div>
+                                            <div class="col-8">
+                                                ${logData.memory_info.total_mb ? 
+                                                    `${logData.memory_info.total_mb}MB (${logData.memory_info.total_gb}GB)` : 
+                                                    'N/A'
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-4"><strong>使用内存:</strong></div>
+                                            <div class="col-8">
+                                                ${logData.memory_info.used_mb ? 
+                                                    `${logData.memory_info.used_mb}MB (${logData.memory_info.used_gb}GB)` : 
+                                                    'N/A'
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-4"><strong>空闲内存:</strong></div>
+                                            <div class="col-8">
+                                                ${logData.memory_info.free_mb ? 
+                                                    `${logData.memory_info.free_mb}MB (${logData.memory_info.free_gb}GB)` : 
+                                                    'N/A'
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="row mb-2">
+                                            <div class="col-4"><strong>可用内存:</strong></div>
+                                            <div class="col-8">
+                                                ${logData.memory_info.available_mb ? 
+                                                    `${logData.memory_info.available_mb}MB (${logData.memory_info.available_gb}GB)` : 
+                                                    'N/A'
+                                                }
+                                            </div>
+                                        </div>
+                                        ` : ''}
                                         <div class="row mb-2">
                                             <div class="col-4"><strong>告警数量:</strong></div>
                                             <div class="col-8">
@@ -2543,6 +2613,389 @@ function bulkDeleteLogs() {
             deleteBtn.disabled = false;
         });
     }
+}
+
+// ========== 服务器批量选择相关函数 ==========
+
+// 切换所有服务器选择
+function toggleAllServersSelection() {
+    const selectAll = document.getElementById('serversSelectAll');
+    const checkboxes = document.querySelectorAll('.server-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateServersSelection();
+}
+
+// 更新服务器选择状态
+function updateServersSelection() {
+    const checkboxes = document.querySelectorAll('.server-checkbox');
+    const checkedBoxes = document.querySelectorAll('.server-checkbox:checked');
+    const selectAll = document.getElementById('serversSelectAll');
+    const toolbar = document.getElementById('serversBulkToolbar');
+    const selectedCount = document.getElementById('serversSelectedCount');
+    
+    // 更新全选复选框状态
+    if (checkedBoxes.length === 0) {
+        selectAll.indeterminate = false;
+        selectAll.checked = false;
+    } else if (checkedBoxes.length === checkboxes.length) {
+        selectAll.indeterminate = false;
+        selectAll.checked = true;
+    } else {
+        selectAll.indeterminate = true;
+        selectAll.checked = false;
+    }
+    
+    // 显示/隐藏工具栏
+    if (checkedBoxes.length > 0) {
+        toolbar.style.display = 'flex';
+        selectedCount.textContent = checkedBoxes.length;
+    } else {
+        toolbar.style.display = 'none';
+    }
+}
+
+// 清除服务器选择
+function clearServersSelection() {
+    const checkboxes = document.querySelectorAll('.server-checkbox');
+    const selectAll = document.getElementById('serversSelectAll');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+    
+    updateServersSelection();
+}
+
+// 批量删除服务器
+function bulkDeleteServers() {
+    const checkedBoxes = document.querySelectorAll('.server-checkbox:checked');
+    
+    if (checkedBoxes.length === 0) {
+        showAlert('请选择要删除的服务器', 'warning');
+        return;
+    }
+    
+    const serverIds = Array.from(checkedBoxes).map(checkbox => parseInt(checkbox.value));
+    
+    // 获取选中的服务器名称
+    const selectedServerNames = Array.from(checkedBoxes).map(checkbox => {
+        const serverId = parseInt(checkbox.value);
+        const server = serversData.find(s => s.id === serverId);
+        return server ? server.name : `服务器${serverId}`;
+    });
+    
+    const serverNamesList = selectedServerNames.length > 5 
+        ? selectedServerNames.slice(0, 5).join('、') + `等${selectedServerNames.length}个服务器`
+        : selectedServerNames.join('、');
+    
+    if (confirm(`确定要删除选中的 ${serverIds.length} 个服务器吗？\n\n将删除：${serverNamesList}\n\n此操作不可撤销，同时会删除相关的服务配置和监控日志。`)) {
+        const deleteBtn = document.getElementById('serversBulkDeleteBtn');
+        const originalText = deleteBtn.innerHTML;
+        
+        deleteBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 删除中...';
+        deleteBtn.disabled = true;
+        
+        safeFetch('/api/servers/bulk-delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                server_ids: serverIds
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                loadServers(); // 重新加载服务器列表
+            } else {
+                showAlert('批量删除失败: ' + data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('批量删除服务器失败:', error);
+            showAlert('批量删除服务器失败', 'danger');
+        })
+        .finally(() => {
+            deleteBtn.innerHTML = originalText;
+            deleteBtn.disabled = false;
+        });
+    }
+}
+
+// ========== 批量导入和一键检测相关函数 ==========
+
+// 全局变量用于记录当前导入类型
+let currentImportType = '';
+
+// 下载服务器导入模板
+function downloadServerTemplate() {
+    window.open('/api/servers/template/download', '_blank');
+}
+
+// 下载服务配置导入模板
+function downloadServiceTemplate() {
+    window.open('/api/services/template/download', '_blank');
+}
+
+// 显示批量导入模态框
+function showBatchImportModal(type) {
+    currentImportType = type;
+    const modal = document.getElementById('batchImportModal');
+    const title = document.getElementById('batchImportModalTitle');
+    
+    if (type === 'server') {
+        title.innerHTML = '<i class="bi bi-upload"></i> 批量导入服务器';
+    } else if (type === 'service') {
+        title.innerHTML = '<i class="bi bi-upload"></i> 批量导入服务配置';
+    }
+    
+    // 重置表单
+    document.getElementById('batchImportForm').reset();
+    document.getElementById('importResults').style.display = 'none';
+    document.getElementById('importBtn').disabled = false;
+    
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+// 执行批量导入
+function executeBatchImport() {
+    const fileInput = document.getElementById('importFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showAlert('请选择要上传的Excel文件', 'warning');
+        return;
+    }
+    
+    if (!file.name.endsWith('.xlsx')) {
+        showAlert('只支持.xlsx格式的Excel文件', 'warning');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const importBtn = document.getElementById('importBtn');
+    const originalText = importBtn.innerHTML;
+    
+    importBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 导入中...';
+    importBtn.disabled = true;
+    
+    let apiUrl = '';
+    if (currentImportType === 'server') {
+        apiUrl = '/api/servers/batch-import';
+    } else if (currentImportType === 'service') {
+        apiUrl = '/api/services/batch-import';
+    }
+    
+    safeFetch(apiUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showImportResults(data.data);
+            showAlert(data.message, 'success');
+            
+            // 刷新相关列表
+            if (currentImportType === 'server') {
+                if (currentSection === 'servers') {
+                    loadServers();
+                }
+            } else if (currentImportType === 'service') {
+                if (currentSection === 'services') {
+                    loadServices();
+                }
+            }
+        } else {
+            showAlert('导入失败: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('批量导入失败:', error);
+        showAlert('批量导入失败', 'danger');
+    })
+    .finally(() => {
+        importBtn.innerHTML = originalText;
+        importBtn.disabled = false;
+    });
+}
+
+// 显示导入结果
+function showImportResults(result) {
+    const resultsDiv = document.getElementById('importResults');
+    const summaryDiv = document.getElementById('importSummary');
+    const detailsDiv = document.getElementById('importDetails');
+    
+    // 显示统计信息
+    let summaryHtml = `
+        <div class="row">
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-primary">${result.total}</div>
+                    <div class="text-muted">总数</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-success">${result.success}</div>
+                    <div class="text-muted">成功</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-danger">${result.failed}</div>
+                    <div class="text-muted">失败</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-info">${((result.success / result.total) * 100).toFixed(1)}%</div>
+                    <div class="text-muted">成功率</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    summaryDiv.innerHTML = summaryHtml;
+    
+    // 显示失败详情
+    if (result.failed_items && result.failed_items.length > 0) {
+        let detailsHtml = '<div class="alert alert-warning"><h6>失败详情：</h6><ul class="mb-0">';
+        result.failed_items.forEach(item => {
+            detailsHtml += `<li><strong>${item.name}</strong>: ${item.error}</li>`;
+        });
+        detailsHtml += '</ul></div>';
+        detailsDiv.innerHTML = detailsHtml;
+    } else {
+        detailsDiv.innerHTML = '<div class="alert alert-success">所有数据都导入成功！</div>';
+    }
+    
+    resultsDiv.style.display = 'block';
+}
+
+// 一键检测服务器连接
+function batchTestServers() {
+    const btn = event.target.closest('button');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 检测中...';
+    btn.disabled = true;
+    
+    safeFetch('/api/servers/batch-test', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            server_ids: [] // 空数组表示测试所有活跃服务器
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showBatchTestResults(data.data);
+        } else {
+            showAlert('检测失败: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('一键检测失败:', error);
+        showAlert('一键检测失败', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+// 显示批量检测结果
+function showBatchTestResults(data) {
+    const modal = document.getElementById('batchTestModal');
+    const summaryDiv = document.getElementById('testSummary');
+    const resultsDiv = document.getElementById('testResults');
+    
+    // 显示统计信息
+    const summary = data.summary;
+    let summaryHtml = `
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-primary">${summary.total}</div>
+                    <div class="text-muted">总数</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-success">${summary.success}</div>
+                    <div class="text-muted">成功</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-danger">${summary.failed}</div>
+                    <div class="text-muted">失败</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-info">${summary.total > 0 ? ((summary.success / summary.total) * 100).toFixed(1) : 0}%</div>
+                    <div class="text-muted">成功率</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    summaryDiv.innerHTML = summaryHtml;
+    
+    // 显示详细结果
+    let resultsHtml = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>服务器名称</th><th>主机地址</th><th>状态</th><th>响应时间</th><th>消息</th></tr></thead><tbody>';
+    
+    for (const [serverId, result] of Object.entries(data.results)) {
+        const statusBadge = result.success ? 
+            '<span class="badge bg-success">成功</span>' : 
+            '<span class="badge bg-danger">失败</span>';
+        
+        const responseTime = result.response_time > 0 ? 
+            `${(result.response_time * 1000).toFixed(0)}ms` : '-';
+        
+        const serverName = result.server_name || `服务器${serverId}`;
+        const serverHost = result.server_host || 'N/A';
+        
+        resultsHtml += `
+            <tr class="${result.success ? 'table-light' : 'table-danger'}">
+                <td><strong>${serverName}</strong></td>
+                <td><code>${serverHost}</code></td>
+                <td>${statusBadge}</td>
+                <td>${responseTime}</td>
+                <td>${result.message}</td>
+            </tr>
+        `;
+    }
+    
+    resultsHtml += '</tbody></table></div>';
+    resultsDiv.innerHTML = resultsHtml;
+    
+    // 显示模态框
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+// 导出检测结果
+function exportTestResults() {
+    // 这里可以实现导出功能，例如生成CSV或Excel文件
+    showAlert('导出功能待实现', 'info');
 }
 
 // ========== 服务配置相关函数 ==========

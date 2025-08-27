@@ -180,6 +180,10 @@ def setup_flask_app_logging(app, app_name: str = 'flask', console_output: bool =
     # 配置Flask应用日志
     app.logger.setLevel(getattr(logging, log_level.upper()))
     
+    # 特别设置service_monitor模块的日志级别为INFO，以便看到详细的调试信息
+    service_monitor_logger = logging.getLogger('app.service_monitor')
+    service_monitor_logger.setLevel(logging.INFO)
+    
     # 配置werkzeug日志（Flask开发服务器）
     werkzeug_logger = logging.getLogger('werkzeug')
     if not console_output:

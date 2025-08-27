@@ -210,18 +210,14 @@ class NotificationService:
             # 添加告警信息
             if alert_details:
                 content += "\n\n告警信息:"
-                for detail in alert_details[:5]:  # 限制显示前5个告警
+                for detail in alert_details:  # 显示所有告警
                     content += f"\n- {detail}"
-                if len(alert_details) > 5:
-                    content += f"\n... 还有 {len(alert_details) - 5} 个告警"
             
             # 添加异常信息
             if failed_details:
                 content += "\n\n异常信息:"
-                for detail in failed_details[:3]:  # 限制显示前3个异常
+                for detail in failed_details:  # 显示所有异常
                     content += f"\n- {detail}"
-                if len(failed_details) > 3:
-                    content += f"\n... 还有 {len(failed_details) - 3} 个异常"
             
             return content
             
