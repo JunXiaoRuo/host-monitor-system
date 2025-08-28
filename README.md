@@ -150,8 +150,15 @@ cp .env.example .env
 # 编辑配置（如果需要）
 vim .env
 
-# 启动服务
+# 快速启动脚本
+windows用户双击start.bat
+macOS/Linux用户执行start.sh
+
+# 开发环境启动
 python run.py
+
+# 生产环境启动
+python start_production.py
 ```
 
 ### 离线部署验证
