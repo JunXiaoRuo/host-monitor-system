@@ -93,6 +93,109 @@ python start_production.py
    - 密码：至少8位，建议包含字母和数字
 4. 登录系统开始使用
 
+## 🌐 内网离线部署
+
+对于无法连接外网的内网环境，系统提供了完整的离线部署方案。
+
+### 在有网络的机器上准备依赖包
+
+#### 方式一：使用自动化脚本（推荐）
+
+```bash
+# 运行依赖包下载脚本
+python quick_prepare.py
+```
+
+#### 方式二：使用批处理脚本
+
+```bash
+# Windows环境
+double-click download_packages.bat
+
+# 或手动执行
+pip download -r requirements.txt --dest python-packages
+```
+
+#### 方式三：手动下载主要依赖
+
+```bash
+# 创建依赖包目录
+mkdir python-packages
+
+# 下载主要依赖包
+pip download Flask==2.3.3 Flask-SQLAlchemy==3.0.5 paramiko==3.3.1 APScheduler==3.10.4 Jinja2==3.1.2 Werkzeug==2.3.7 cryptography==41.0.4 psutil==5.9.6 requests==2.31.0 python-dotenv==1.0.0 pandas==2.0.3 openpyxl==3.1.2 --dest python-packages
+```
+
+### 在内网机器上部署
+
+#### 1. 传输文件
+将整个项目文件夹（包含python-packages目录）复制到内网机器。
+
+#### 2. 离线安装依赖
+
+```bash
+# Windows环境：双击运行
+install_offline.bat
+
+# Linux/Mac环境
+pip install --no-index --find-links python-packages -r requirements.txt
+```
+
+#### 3. 配置和启动
+
+```bash
+# 复制配置文件
+cp .env.example .env
+
+# 编辑配置（如果需要）
+vim .env
+
+# 启动服务
+python run.py
+```
+
+### 离线部署验证
+
+1. **检查依赖安装**：
+   ```bash
+   python -c "import flask; print('Flask:', flask.__version__)"
+   python -c "import paramiko; print('Paramiko 已安装')"
+   python -c "import pandas; print('Pandas 已安装')"
+   ```
+
+2. **访问系统**：浏览器打开 `http://localhost:5000`
+
+3. **功能测试**：登录后添加测试服务器，执行监控验证
+
+### 离线部署注意事项
+
+- **Python版本**：内网机器需要预装Python 3.8+
+- **端口检查**：确保5000端口未被占用
+- **权限设置**：确保有文件读写权限
+- **依赖完整性**：确保python-packages目录包含所有.whl文件
+
+### 离线部署故障排除
+
+1. **pip不是内部命令**：
+   - 重新安装Python，勾选"Add Python to PATH"
+   - 手动添加Python路径到环境变量
+
+2. **依赖安装失败**：
+   ```bash
+   # 重新下载依赖包
+   pip download -r requirements.txt --dest python-packages --force-reinstall
+   
+   # 手动安装主要包
+   pip install python-packages/*.whl --force-reinstall
+   ```
+
+3. **权限问题**：
+   ```bash
+   # Linux/Mac环境
+   chmod 755 install_offline.sh
+   chmod -R 755 python-packages/
+   ```
+
 ## 🔑 密码管理
 
 ### 重置管理员密码
@@ -163,9 +266,13 @@ python reset_password.py admin newpassword123
 │   ├── run-error.log           # 开发环境错误日志
 │   ├── production.log          # 生产环境运行日志
 │   └── production-error.log    # 生产环境错误日志
+├── python-packages/             # 离线部署依赖包目录（运行quick_prepare.py后生成）
+│   └── *.whl                   # Python依赖包文件
 ├── config.py                    # 应用配置文件
 ├── log_config.py                # 日志配置文件
 ├── requirements.txt             # Python依赖包列表
+├── quick_prepare.py             # 离线部署依赖包准备脚本
+├── install_offline.bat          # 内网环境离线安装脚本
 ├── .env                         # 环境配置文件（包含敏感信息）
 ├── .env.example                 # 环境配置模板
 ├── .gitignore                   # Git忽略文件配置
