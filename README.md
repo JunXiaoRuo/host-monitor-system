@@ -39,7 +39,7 @@
 
 ```bash
 # 克隆项目（如果从Git获取）
-git clone <repository-url>
+git clone https://github.com/JunXiaoRuo/host-monitor-system
 cd 主机巡视
 
 # 或直接解压项目包到目录
@@ -53,6 +53,7 @@ cp .env.example .env
 
 # 编辑.env文件，修改相关配置
 # 重要：修改SECRET_KEY和ENCRYPTION_KEY为强密码
+# 密钥生成命令：python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 **必要的配置项**：
@@ -60,6 +61,7 @@ cp .env.example .env
 - `ENCRYPTION_KEY`: 数据加密密钥
 - `HOST`: 监听IP地址（默认0.0.0.0）
 - `PORT`: 监听端口（默认5000）
+
 
 ### 3. 安装依赖
 
@@ -71,6 +73,10 @@ pip install -r requirements.txt
 ### 4. 启动系统
 
 ```bash
+# 快速启动脚本
+windows用户双击start.bat
+macOS/Linux用户执行start.sh
+
 # 开发环境启动
 python run.py
 
@@ -269,7 +275,42 @@ DATABASE_URL=postgresql://username:password@localhost:5432/host_monitor
 
 ### 常见问题
 
-1. **启动失败**
+1. **依赖安装失败**
+	```bash
+	# 升级pip
+	python -m pip install --upgrade pip
+
+	# 使用国内镜像
+	pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
+	```
+	
+	
+2. **端口被占用**
+	修改 `.env` 文件中的 PORT 配置:
+	```env
+	PORT=8080
+	```
+	
+	
+3. **Linux权限问题**
+	确保有写入权限:
+	```bash
+	chmod 755 run.py start_production.py
+	chmod 755 instance/ logs/ reports/
+	```	
+4. **Linux防火墙设置**
+	确保防火墙允许配置的端口访问:
+	```bash
+	# CentOS/RHEL
+	firewall-cmd --permanent --add-port=5000/tcp
+	firewall-cmd --reload
+
+	# Ubuntu
+	ufw allow 5000
+	```
+
+
+5. **启动失败**
    ```bash
    # 检查Python版本
    python --version
@@ -277,35 +318,37 @@ DATABASE_URL=postgresql://username:password@localhost:5432/host_monitor
    # 重新安装依赖
    pip install -r requirements.txt
    ```
+   
 
-2. **Flask环境变量警告**
+
+6. **Flask环境变量警告**
    如果看到`'FLASK_ENV' is deprecated`警告：
    - 检查`.env`文件是否使用`FLASK_DEBUG=True`而不是`FLASK_ENV=development`
    - 如果仍有问题，请更新Flask到最新版本
 
-3. **密码解密失败**
+7. **密码解密失败**
    如果看到`密码解密失败`错误：
    - 检查`.env`文件中的`ENCRYPTION_KEY`是否正确设置
    - 确保密钥是44位的Base64编码字符串
    - 如果是旧数据，可能需要重新添加服务器
 
-4. **SSH连接失败**
+8. **SSH连接失败**
    - 检查服务器IP和端口
    - 验证用户名密码或私钥
    - 确认SSH服务运行正常
    - 检查网络连通性
 
-5. **通知发送失败**
+9. **通知发送失败**
    - 验证Webhook URL正确性
    - 检查网络连接
    - 查看日志文件错误信息
 
-6. **监控异常**
+10. **监控异常**
    - 检查被监控服务器SSH权限
    - 确认服务器系统命令可用
    - 查看 `host_monitor.log` 日志
 
-7. **SSH Shell兼容性错误**
+11. **SSH Shell兼容性错误**
    系统已对常见的shell配置错误进行了智能处理，以下错误将被自动忽略：
    
    **已忽略的非关键错误**：
@@ -618,270 +661,3 @@ grep -r "SSH" logs/flask-*.log | tail -10
 - 内存使用率超过设定阈值  
 - 任意磁盘分区使用率超过设定阈值
 - SSH连接失败或命令执行超时
-
-## 🆕 版本信息
-
-**当前版本**: v2.2
-**发布日期**: 2025-08-27
-
-### 更新内容
-
-#### v2.2 (2025-08-27)
-- ✅ 新增批量导入服务，支持服务器和服务配置批量导入
-- ✅ 新增服务器批量删除功能，支持多选操作
-- ✅ 优化一键检测结果显示，添加服务器名称和主机地址
-- ✅ 增强SSH Shell兼容性错误处理，智能忽略非关键错误
-- ✅ 新增监控开始日志，提供完整的监控过程记录
-- ✅ 新增log_config.py模块，优化日志系统配置
-- ✅ 更新README文档，添加详细的故障排除指南
-
-#### v2.1 (2025-08-28)
-- ✅ 修复日志轮转时文件命名不正确的问题
-- ✅ 优化日志文件命名格式，确保生成正确的文件名（如flask-20250827.log）
-- ✅ 改进日志系统稳定性
-
-#### v2.0 (2025-08-26)
-- ✅ 完善的认证系统和用户管理
-- ✅ 稳定的多线程监控机制
-- ✅ 可靠的应用上下文管理
-- ✅ 全面的错误处理和日志记录
-- ✅ 灵活的通知配置和推送
-- ✅ 响应式Web界面设计
-
-### 主要特性
-
-- ✅ 完善的认证系统和用户管理
-- ✅ 稳定的多线程监控机制
-- ✅ 可靠的应用上下文管理
-- ✅ 全面的错误处理和日志记录
-- ✅ 灵活的通知配置和推送
-- ✅ 响应式Web界面设计
-- ✅ 正确的日志轮转和文件命名
-- ✅ 批量导入和批量删除功能
-- ✅ 智能SSH Shell错误处理
-- ✅ 完整的监控日志记录
-
-### 技术亮点
-
-- 🎯 **单例模式**: 调度器和服务监控使用单例模式，避免重复初始化
-- 🔧 **延迟初始化**: 智能的服务初始化，支持多线程环境
-- 🛡️ **线程安全**: 完善的多线程监控机制，独立数据库会话
-- 📱 **响应式设计**: 支持移动端访问的现代化界面
-- 📋 **日志管理**: 按天分割的日志文件，正确的文件命名格式
-- 📥 **批量操作**: 支持服务器和服务批量导入、删除功能
-- 🛠️ **错误处理**: 智能SSH Shell兼容性错误处理，自动忽略非关键错误
-- 📊 **监控增强**: 完整的监控过程日志，从开始到结束
-
----
-
-
-
-
-
-
-## 📦 部署指南
-
-### 🚀 快速部署
-
-#### 1. 环境要求
-
-- Python 3.8
-- 操作系统: Windows/Linux/macOS
-- 内存: 建议512MB以上
-- 磁盘: 建议100MB以上可用空间
-
-#### 2. 安装步骤
-
-##### 步骤1: 解压项目文件
-```bash
-# 解压到目标目录
-unzip 主机巡视系统_v2.0_*.zip
-cd "主机巡视系统"
-```
-
-##### 步骤2: 安装Python依赖
-```bash
-# 安装依赖包
-pip install -r requirements.txt
-
-# 或使用国内镜像加速
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
-```
-
-##### 步骤3: 配置环境
-```bash
-# 复制配置模板
-cp .env.example .env
-
-# 编辑配置文件（重要！）
-vim .env  # 或使用其他编辑器
-```
-
-**必须修改的配置项**:
-```env
-# 生产环境必须修改这些密钥！
-SECRET_KEY=your-new-secret-key-here
-ENCRYPTION_KEY=your-new-encryption-key-here
-
-# 服务器配置
-HOST=0.0.0.0
-PORT=5000
-
-# 数据库配置（可选，默认使用SQLite）
-# DATABASE_URL=sqlite:///instance/host_monitor.db
-```
-
-##### 步骤4: 启动系统
-
-**开发/测试环境**:
-```bash
-python run.py
-```
-
-**生产环境**:
-```bash
-python start_production.py
-```
-
-或者使用启动脚本:
-- Linux/Mac: `./start.sh`
-- Windows: `start.bat`
-
-##### 步骤5: 初始化系统
-1. 打开浏览器访问: http://localhost:5000
-2. 首次访问会进入初始化页面
-3. 创建管理员账户
-4. 添加服务器开始监控
-
-### ⚙️ 启动脚本使用说明
-
-项目提供了便捷的启动脚本：
-
-#### Linux/Mac (start.sh)
-```bash
-# 给脚本执行权限
-chmod +x start.sh
-
-# 运行脚本
-./start.sh
-```
-
-脚本会提示选择运行模式：
-1. 开发模式 - 启用控制台日志，便于调试
-2. 生产模式 - 禁用控制台日志，适合长期运行
-
-#### Windows (start.bat)
-```cmd
-# 直接双击运行或在命令行执行
-start.bat
-```
-
-脚本会提示选择运行模式：
-1. 开发模式 - 启用控制台日志，便于调试
-2. 生产模式 - 禁用控制台日志，适合长期运行
-
-### 🔧 配置说明
-
-#### 环境配置 (.env)
-
-| 配置项 | 说明 | 默认值 | 必须修改 |
-|--------|------|--------|----------|
-| SECRET_KEY | Flask应用密钥 | - | ✅ |
-| ENCRYPTION_KEY | 数据加密密钥 | - | ✅ |
-| HOST | 监听IP地址 | 0.0.0.0 | - |
-| PORT | 监听端口 | 5000 | - |
-| DEBUG | 调试模式 | True | 生产环境建议False |
-| CONSOLE_LOG_ENABLED | 控制台日志 | True | 生产环境建议False |
-
-#### 数据库配置
-
-**SQLite (默认)**:
-```env
-DATABASE_URL=sqlite:///instance/host_monitor.db
-```
-
-**MySQL**:
-```env
-DATABASE_URL=mysql://username:password@localhost:3306/host_monitor
-```
-
-**PostgreSQL**:
-```env
-DATABASE_URL=postgresql://username:password@localhost:5432/host_monitor
-```
-
-### 🛠️ 常见问题
-
-#### 1. 依赖安装失败
-```bash
-# 升级pip
-python -m pip install --upgrade pip
-
-# 使用国内镜像
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
-```
-
-#### 2. 端口被占用
-修改 `.env` 文件中的 PORT 配置:
-```env
-PORT=8080
-```
-
-#### 3. 权限问题
-确保有写入权限:
-```bash
-chmod 755 run.py start_production.py
-chmod 755 instance/ logs/ reports/
-```
-
-#### 4. 防火墙设置
-确保防火墙允许配置的端口访问:
-```bash
-# CentOS/RHEL
-firewall-cmd --permanent --add-port=5000/tcp
-firewall-cmd --reload
-
-# Ubuntu
-ufw allow 5000
-```
-
-### 🔒 安全建议
-
-#### 生产环境部署
-
-1. **修改默认密钥**:
-   - 生成新的 SECRET_KEY 和 ENCRYPTION_KEY
-   - 使用强密码策略
-
-2. **网络安全**:
-   - 限制访问IP范围
-   - 配置HTTPS（推荐）
-   - 使用反向代理（如Nginx）
-
-3. **文件权限**:
-   - 确保 .env 文件权限为 600
-   - 定期备份数据库文件
-
-4. **系统维护**:
-   - 定期更新系统和依赖
-   - 监控系统日志
-   - 定期备份配置和数据
-
-### 📊 系统监控
-
-#### 日志文件位置
-- **应用日志**: `logs/` 目录
-- **系统日志**: 按天分割存储
-- **错误日志**: 单独存储便于排查
-
-#### 性能监控
-- 定期检查 `logs/` 目录大小
-- 监控 `instance/` 数据库文件大小
-- 查看系统资源使用情况
-
-### 🆘 技术支持
-
-如需技术支持:
-1. 查看 `logs/` 目录下的日志文件
-2. 检查本文件中的故障排除部分
-3. 确认所有配置项正确设置

@@ -718,6 +718,40 @@ def create_app(config_object='config.Config'):
             logger.error(f"执行监控失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
+    @app.route('/api/monitor/server/<int:server_id>', methods=['POST'])
+    @login_required
+    def monitor_single_server(server_id):
+        """监控单个服务器"""
+        try:
+            # 获取服务器信息
+            server = Server.query.get(server_id)
+            if not server:
+                return jsonify({'success': False, 'message': '服务器不存在'})
+            
+            if server.status != 'active':
+                return jsonify({'success': False, 'message': '服务器未启用'})
+            
+            # 获取阈值配置
+            thresholds = threshold_service.get_threshold_config()
+            
+            # 监控单个服务器
+            result = host_monitor.monitor_single_server(server, thresholds)
+            
+            # 保存监控结果
+            host_monitor.save_monitor_result(result)
+            
+            logger.info(f"单个服务器监控完成: {server.name}, 状态: {result['status']}")
+            
+            return jsonify({
+                'success': True, 
+                'message': f'服务器 "{server.name}" 监控完成',
+                'data': result
+            })
+            
+        except Exception as e:
+            logger.error(f"监控单个服务器失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
     @app.route('/api/thresholds', methods=['GET'])
     @login_required
     def get_thresholds():

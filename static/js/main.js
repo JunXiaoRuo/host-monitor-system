@@ -158,7 +158,13 @@ function updateServerStatusList(serverStatus) {
                             ${status.status}
                         </span>
                     </div>
-                    <small>${status.monitor_time ? new Date(status.monitor_time).toLocaleString('zh-CN') : '未监控'}</small>
+                    <div class="d-flex align-items-center">
+                        <small class="me-2">${status.monitor_time ? new Date(status.monitor_time).toLocaleString('zh-CN') : '未监控'}</small>
+                        <button class="btn btn-sm btn-outline-primary" onclick="monitorSingleServerFromDashboard('${serverId}', '${status.server_name || '服务器'}')"
+                                title="监控该服务器">
+                            <i class="bi bi-play-circle"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="row mt-2">
                     <div class="col-md-3"><small>CPU: ${status.cpu_usage ? status.cpu_usage.toFixed(1) + '%' : 'N/A'}</small></div>
@@ -199,6 +205,78 @@ function executeMonitor() {
     .catch(error => {
         if (error.message !== 'Unauthorized') {
             showAlert('执行监控失败', 'danger');
+        }
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+// 从仪表盘监控单个服务器
+function monitorSingleServerFromDashboard(serverId, serverName) {
+    if (!confirm(`确定要立即监控服务器 "${serverName}" 吗？`)) {
+        return;
+    }
+    
+    const btn = event.target.closest('button');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    btn.disabled = true;
+    
+    safeFetch(`/api/monitor/server/${serverId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`服务器 "${serverName}" 监控完成！`, 'success');
+            // 刷新仪表盘数据
+            setTimeout(refreshDashboard, 1000);
+        } else {
+            showAlert(`监控失败: ${data.message}`, 'danger');
+        }
+    })
+    .catch(error => {
+        if (error.message !== 'Unauthorized') {
+            showAlert('监控失败', 'danger');
+        }
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
+}
+
+// 从服务器管理表监控单个服务器
+function monitorSingleServerFromTable(serverId, serverName) {
+    if (!confirm(`确定要立即监控服务器 "${serverName}" 吗？`)) {
+        return;
+    }
+    
+    const btn = event.target.closest('button');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    btn.disabled = true;
+    
+    safeFetch(`/api/monitor/server/${serverId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`服务器 "${serverName}" 监控完成！`, 'success');
+            // 刷新服务器列表
+            loadServers();
+        } else {
+            showAlert(`监控失败: ${data.message}`, 'danger');
+        }
+    })
+    .catch(error => {
+        if (error.message !== 'Unauthorized') {
+            showAlert('监控失败', 'danger');
         }
     })
     .finally(() => {
@@ -254,7 +332,7 @@ function renderServersTable(servers) {
     if (!servers || servers.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="text-center text-muted">
+                <td colspan="10" class="text-center text-muted">
                     <i class="bi bi-inbox"></i>
                     暂无服务器数据
                 </td>
@@ -291,6 +369,9 @@ function renderServersTable(servers) {
                 <td>${serviceCountDisplay}</td>
                 <td>${server.updated_at ? new Date(server.updated_at).toLocaleString('zh-CN') : '-'}</td>
                 <td>
+                    <button class="btn btn-sm btn-outline-success me-1" onclick="monitorSingleServerFromTable(${server.id}, '${server.name}')" title="监控该服务器">
+                        <i class="bi bi-play-circle"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-primary me-1" onclick="testConnection(${server.id})" title="测试连接">
                         <i class="bi bi-wifi"></i>
                     </button>
@@ -310,8 +391,10 @@ function renderServersTable(servers) {
     
     tbody.innerHTML = html;
     
-    // 重置选择状态
-    clearServersSelection();
+    // 使用延迟重置选择状态，确保DOM元素渲染完成
+    setTimeout(() => {
+        clearServersSelection();
+    }, 10);
 }
 
 // 显示添加服务器模态框
@@ -1745,8 +1828,10 @@ function renderReportsTable(reports) {
     
     tbody.innerHTML = html;
     
-    // 重置选择状态
-    clearReportsSelection();
+    // 使用延迟重置选择状态，确保DOM元素渲染完成
+    setTimeout(() => {
+        clearReportsSelection();
+    }, 10);
 }
 
 // 格式化文件大小
@@ -1966,8 +2051,10 @@ function renderLogsTable(logs) {
     
     tbody.innerHTML = html;
     
-    // 重置选择状态
-    clearLogsSelection();
+    // 使用延迟重置选择状态，确保DOM元素渲染完成
+    setTimeout(() => {
+        clearLogsSelection();
+    }, 10);
 }
 
 // 查看日志详情
@@ -2517,11 +2604,17 @@ function toggleAllLogsSelection() {
     const selectAll = document.getElementById('logsSelectAll');
     const checkboxes = document.querySelectorAll('.log-checkbox');
     
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
-    });
-    
-    updateLogsSelection();
+    // 延迟一点获取状态，确保复选框状态已更新
+    setTimeout(() => {
+        const isChecked = selectAll.checked;
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        
+        // 立即更新选择状态
+        updateLogsSelection();
+    }, 0);
 }
 
 // 更新日志选择状态
@@ -2532,11 +2625,19 @@ function updateLogsSelection() {
     const toolbar = document.getElementById('logsBulkToolbar');
     const selectedCount = document.getElementById('logsSelectedCount');
     
+    // 确保元素存在
+    if (!selectAll || !toolbar || !selectedCount) {
+        return;
+    }
+    
+    const totalCount = checkboxes.length;
+    const checkedCount = checkedBoxes.length;
+    
     // 更新全选复选框状态
-    if (checkedBoxes.length === 0) {
+    if (checkedCount === 0) {
         selectAll.indeterminate = false;
         selectAll.checked = false;
-    } else if (checkedBoxes.length === checkboxes.length) {
+    } else if (checkedCount === totalCount) {
         selectAll.indeterminate = false;
         selectAll.checked = true;
     } else {
@@ -2544,12 +2645,13 @@ function updateLogsSelection() {
         selectAll.checked = false;
     }
     
-    // 显示/隐藏工具栏
-    if (checkedBoxes.length > 0) {
+    // 显示/隐藏工具栏和更新计数
+    if (checkedCount > 0) {
         toolbar.style.display = 'flex';
-        selectedCount.textContent = checkedBoxes.length;
+        selectedCount.textContent = checkedCount;
     } else {
         toolbar.style.display = 'none';
+        selectedCount.textContent = '0';
     }
 }
 
@@ -2565,6 +2667,7 @@ function clearLogsSelection() {
     selectAll.checked = false;
     selectAll.indeterminate = false;
     
+    // 立即更新选择状态和计数
     updateLogsSelection();
 }
 
@@ -2622,11 +2725,17 @@ function toggleAllServersSelection() {
     const selectAll = document.getElementById('serversSelectAll');
     const checkboxes = document.querySelectorAll('.server-checkbox');
     
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
-    });
-    
-    updateServersSelection();
+    // 延迟一点获取状态，确保复选框状态已更新
+    setTimeout(() => {
+        const isChecked = selectAll.checked;
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        
+        // 立即更新选择状态
+        updateServersSelection();
+    }, 0);
 }
 
 // 更新服务器选择状态
@@ -2637,11 +2746,19 @@ function updateServersSelection() {
     const toolbar = document.getElementById('serversBulkToolbar');
     const selectedCount = document.getElementById('serversSelectedCount');
     
+    // 确保元素存在
+    if (!selectAll || !toolbar || !selectedCount) {
+        return;
+    }
+    
+    const totalCount = checkboxes.length;
+    const checkedCount = checkedBoxes.length;
+    
     // 更新全选复选框状态
-    if (checkedBoxes.length === 0) {
+    if (checkedCount === 0) {
         selectAll.indeterminate = false;
         selectAll.checked = false;
-    } else if (checkedBoxes.length === checkboxes.length) {
+    } else if (checkedCount === totalCount) {
         selectAll.indeterminate = false;
         selectAll.checked = true;
     } else {
@@ -2649,12 +2766,13 @@ function updateServersSelection() {
         selectAll.checked = false;
     }
     
-    // 显示/隐藏工具栏
-    if (checkedBoxes.length > 0) {
+    // 显示/隐藏工具栏和更新计数
+    if (checkedCount > 0) {
         toolbar.style.display = 'flex';
-        selectedCount.textContent = checkedBoxes.length;
+        selectedCount.textContent = checkedCount;
     } else {
         toolbar.style.display = 'none';
+        selectedCount.textContent = '0';
     }
 }
 
@@ -2670,6 +2788,7 @@ function clearServersSelection() {
     selectAll.checked = false;
     selectAll.indeterminate = false;
     
+    // 立即更新选择状态和计数
     updateServersSelection();
 }
 
@@ -4247,11 +4366,17 @@ function toggleAllReportsSelection() {
     const selectAll = document.getElementById('reportsSelectAll');
     const checkboxes = document.querySelectorAll('.report-checkbox');
     
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
-    });
-    
-    updateReportsSelection();
+    // 延迟一点获取状态，确保复选框状态已更新
+    setTimeout(() => {
+        const isChecked = selectAll.checked;
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        
+        // 立即更新选择状态
+        updateReportsSelection();
+    }, 0);
 }
 
 // 更新报告选择状态
@@ -4262,11 +4387,19 @@ function updateReportsSelection() {
     const toolbar = document.getElementById('reportsBulkToolbar');
     const selectedCount = document.getElementById('reportsSelectedCount');
     
+    // 确保元素存在
+    if (!selectAll || !toolbar || !selectedCount) {
+        return;
+    }
+    
+    const totalCount = checkboxes.length;
+    const checkedCount = checkedBoxes.length;
+    
     // 更新全选复选框状态
-    if (checkedBoxes.length === 0) {
+    if (checkedCount === 0) {
         selectAll.indeterminate = false;
         selectAll.checked = false;
-    } else if (checkedBoxes.length === checkboxes.length) {
+    } else if (checkedCount === totalCount) {
         selectAll.indeterminate = false;
         selectAll.checked = true;
     } else {
@@ -4274,12 +4407,13 @@ function updateReportsSelection() {
         selectAll.checked = false;
     }
     
-    // 显示/隐藏工具栏
-    if (checkedBoxes.length > 0) {
+    // 显示/隐藏工具栏和更新计数
+    if (checkedCount > 0) {
         toolbar.style.display = 'flex';
-        selectedCount.textContent = checkedBoxes.length;
+        selectedCount.textContent = checkedCount;
     } else {
         toolbar.style.display = 'none';
+        selectedCount.textContent = '0';
     }
 }
 
@@ -4295,6 +4429,7 @@ function clearReportsSelection() {
     selectAll.checked = false;
     selectAll.indeterminate = false;
     
+    // 立即更新选择状态和计数
     updateReportsSelection();
 }
 
