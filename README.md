@@ -123,16 +123,6 @@ double-click download_packages.bat
 pip download -r requirements.txt --dest python-packages
 ```
 
-#### 方式三：手动下载主要依赖
-
-```bash
-# 创建依赖包目录
-mkdir python-packages
-
-# 下载主要依赖包
-pip download Flask==2.3.3 Flask-SQLAlchemy==3.0.5 paramiko==3.3.1 APScheduler==3.10.4 Jinja2==3.1.2 Werkzeug==2.3.7 cryptography==41.0.4 psutil==5.9.6 requests==2.31.0 python-dotenv==1.0.0 pandas==2.0.3 openpyxl==3.1.2 --dest python-packages
-```
-
 ### 在内网机器上部署
 
 #### 1. 传输文件
@@ -157,8 +147,15 @@ cp .env.example .env
 # 编辑配置（如果需要）
 vim .env
 
-# 启动服务
+# 快速启动脚本
+windows用户双击start.bat
+macOS/Linux用户执行start.sh
+
+# 开发环境启动
 python run.py
+
+# 生产环境启动
+python start_production.py
 ```
 
 ### 离线部署验证
