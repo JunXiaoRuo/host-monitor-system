@@ -138,7 +138,7 @@ pip install --no-index --find-links python-packages -r requirements.txt
 echo 验证安装...
 python -c "import flask; print('安装成功!')"
 
-echo 完成! 现在可以运行: start.bat|start.sh
+echo 完成! 现在可以运行: start.bat/start.sh
 pause
 """
     
