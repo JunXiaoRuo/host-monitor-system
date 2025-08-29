@@ -84,6 +84,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+python-packages/*
 
 # Spyder项目设置
 .spyderproject
