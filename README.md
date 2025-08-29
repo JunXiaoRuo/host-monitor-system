@@ -53,7 +53,8 @@ cp .env.example .env
 
 # 编辑.env文件，修改相关配置
 # 重要：修改SECRET_KEY和ENCRYPTION_KEY为强密码
-# 密钥生成命令：python -c "import secrets; print(secrets.token_urlsafe(32))"
+# SECRET_KEY生成命令：python -c "import secrets; print(secrets.token_urlsafe(32))"
+# ENCRYPTION_KEY生成命令：python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
 **必要的配置项**：
@@ -144,7 +145,10 @@ pip install --no-index --find-links python-packages -r requirements.txt
 # 复制配置文件
 cp .env.example .env
 
-# 编辑配置（如果需要）
+# 编辑.env文件，修改相关配置
+# 重要：修改SECRET_KEY和ENCRYPTION_KEY为强密码
+# SECRET_KEY生成命令：python -c "import secrets; print(secrets.token_urlsafe(32))"
+# ENCRYPTION_KEY生成命令：python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 vim .env
 
 # 快速启动脚本
@@ -254,6 +258,7 @@ python reset_password.py admin newpassword123
 │   ├── scheduler.py             # 任务调度器服务
 │   ├── ssh_manager.py           # SSH连接管理器
 │   ├── notification_service.py  # 通知推送服务
+│   ├── oss_service.py           # 阿里云OSS存储服务
 │   ├── report_generator.py      # 监控报告生成器
 │   └── batch_import_service.py  # 批量导入服务
 ├── templates/                   # HTML模板文件
@@ -365,7 +370,7 @@ vim .env  # 或使用其他编辑器
 | 配置项 | 默认值 | 说明 |
 |---------|---------|--------|
 | `SECRET_KEY` | (需要设置) | Flask应用安全密钥 |
-| `ENCRYPTION_KEY` | (需要设置) | 数据加密密钥 |
+| `ENCRYPTION_KEY` | (需要设置) | 数据加密密钥（必须为44位Fernet格式） |
 | `HOST` | 0.0.0.0 | 监听IP地址 |
 | `PORT` | 5000 | 监听端口 |
 | `DEBUG` | True | 调试模式 |
@@ -374,6 +379,24 @@ vim .env  # 或使用其他编辑器
 | `DEFAULT_CPU_THRESHOLD` | 90.0 | CPU告警阈值(%) |
 | `DEFAULT_MEMORY_THRESHOLD` | 90.0 | 内存告警阈值(%) |
 | `DEFAULT_DISK_THRESHOLD` | 90.0 | 磁盘告警阈值(%) |
+
+**密钥生成说明**:
+
+生产环境中必须更改默认密钥，使用以下命令生成安全的密钥：
+
+```bash
+# 生成SECRET_KEY（Flask应用安全密钥）
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(32))"
+
+# 生成ENCRYPTION_KEY（数据加密密钥，必须为Fernet格式）
+python -c "from cryptography.fernet import Fernet; print('ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
+```
+
+**重要提示**:
+- `SECRET_KEY` 可以使用 `secrets.token_urlsafe(32)` 生成，长度为43个字符
+- `ENCRYPTION_KEY` 必须使用 `Fernet.generate_key()` 生成，长度为44个字符
+- 两个密钥的格式不同，不能混用
+- 生产环境中请妥善保管这些密钥，丢失将导致无法解密已存储的数据
 
 **数据库配置示例**:
 ```bash
@@ -466,6 +489,7 @@ DATABASE_URL=postgresql://username:password@localhost:5432/host_monitor
    - 验证Webhook URL正确性
    - 检查网络连接
    - 查看日志文件错误信息
+   - 如果启用了OSS上传，检查OSS配置是否正确
 
 10. **监控异常**
    - 检查被监控服务器SSH权限
@@ -768,6 +792,117 @@ grep -r "SSH" logs/flask-*.log | tail -10
    - SSH用户使用最小必要权限
    - 定期更换认证凭据
    - 监控系统访问日志
+
+## 🔔 通知配置
+
+### 基础通知配置
+
+系统支持通过Webhook方式发送通知到企业微信、钉钉等平台。在通知通道配置中，可以设置：
+
+- **通道名称**: 自定义通知通道名称
+- **Webhook URL**: 接收通知的URL地址
+- **请求方式**: 支持POST/GET方法
+- **超时时间**: 请求超时设置（秒）
+- **内容模板**: 通知消息的文本内容
+- **请求体模板**: JSON格式的请求体
+
+### 阿里云OSS集成
+
+系统支持将监控报告自动上传到阿里云OSS，并在通知中提供下载链接。
+
+#### OSS配置步骤
+
+1. **开通阿里云OSS服务**
+   - 登录阿里云控制台
+   - 开通对象存储OSS服务
+   - 创建存储桶（Bucket）
+
+2. **获取访问凭证**
+   - 创建RAM用户并授予OSS权限
+   - 获取Access Key ID和Access Key Secret
+   - 记录OSS Endpoint地址
+
+3. **在通知通道中配置OSS**
+   
+   在添加或编辑通知通道时，启用"阿里云OSS配置"：
+   
+   - **启用OSS**: 开启OSS上传功能
+   - **Endpoint**: OSS服务的访问域名
+     ```
+     示例: https://oss-cn-hangzhou.aliyuncs.com
+     ```
+   - **Bucket名称**: 存储桶名称
+   - **Access Key ID**: 阿里云访问密钥ID
+   - **Access Key Secret**: 阿里云访问密钥Secret
+   - **存储文件夹路径**: 报告文件在OSS中的存储路径（可选）
+     ```
+     示例: reports/monitor/
+     ```
+
+4. **在通知模板中使用下载链接**
+   
+   在内容模板或请求体模板中使用 `#url#` 变量：
+   
+   **内容模板示例**:
+   ```
+   监控报告已生成，请点击链接查看：#url#
+   ```
+   
+   **请求体模板示例**:
+   ```json
+   {
+     "msgtype": "text",
+     "text": {
+       "content": "主机监控报告\n报告时间: #timestamp#\n下载链接: #url#"
+     }
+   }
+   ```
+
+#### OSS配置说明
+
+- **Endpoint格式**: 必须以 `http://` 或 `https://` 开头
+- **文件命名**: 上传的文件会自动添加时间戳，格式为 `report_YYYYMMDD_HHMMSS.html`
+- **访问权限**: 上传的文件默认为私有，通过预签名URL提供临时访问
+- **链接有效期**: 下载链接默认有效期为24小时
+- **存储路径**: 如果指定了存储文件夹路径，文件将存储在该路径下
+
+#### 变量说明
+
+在通知模板中可以使用以下变量：
+
+- `#url#`: OSS下载链接（仅在启用OSS时可用）
+- `#timestamp#`: 报告生成时间
+- `#server_count#`: 监控服务器数量
+- `#alert_count#`: 告警数量
+
+#### 故障排除
+
+**OSS上传失败常见问题**:
+
+1. **配置错误**
+   - 检查Endpoint格式是否正确
+   - 验证Access Key ID和Secret是否有效
+   - 确认Bucket名称是否存在
+
+2. **权限问题**
+   - 确保RAM用户有OSS读写权限
+   - 检查Bucket的访问权限设置
+
+3. **网络问题**
+   - 确认服务器能访问OSS服务
+   - 检查防火墙设置
+
+4. **文件上传失败**
+   - 查看系统日志中的详细错误信息
+   - 检查本地报告文件是否存在
+   - 确认存储空间是否充足
+
+**日志查看**:
+```bash
+# 查看OSS相关日志
+grep "OSS" logs/flask-*.log
+grep "上传" logs/flask-*.log
+```
 
 ## 📊 监控指标
 

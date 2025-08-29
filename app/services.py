@@ -23,15 +23,20 @@ class ServerService:
             if current_app:
                 encryption_key = current_app.config.get('ENCRYPTION_KEY')
                 if encryption_key:
-                    # 如果密钥是base64编码的，则解码
+                    # Fernet密钥必须是base64编码的44字符字符串
                     import base64
                     try:
-                        return base64.b64decode(encryption_key)
-                    except:
-                        # 如果不是base64编码，直接使用
-                        if len(encryption_key) == 44:  # Fernet key的标准长度
+                        # 验证是否为有效的base64编码
+                        decoded_key = base64.b64decode(encryption_key)
+                        # 验证解码后的长度是否为32字节（Fernet要求）
+                        if len(decoded_key) == 32:
+                            # 返回原始的base64编码字符串，不是解码后的bytes
                             return encryption_key.encode()
-                        # 如果长度不对，生成新密钥
+                        else:
+                            logger.warning(f"ENCRYPTION_KEY解码后长度不正确: {len(decoded_key)}字节，应为32字节")
+                            return Fernet.generate_key()
+                    except Exception as e:
+                        logger.warning(f"ENCRYPTION_KEY不是有效的base64编码: {str(e)}")
                         return Fernet.generate_key()
         except:
             pass
@@ -42,13 +47,17 @@ class ServerService:
         if encryption_key:
             import base64
             try:
-                return base64.b64decode(encryption_key)
-            except:
-                if len(encryption_key) == 44:
+                decoded_key = base64.b64decode(encryption_key)
+                if len(decoded_key) == 32:
+                    # 返回原始的base64编码字符串，不是解码后的bytes
                     return encryption_key.encode()
+                else:
+                    logger.warning(f"环境变量ENCRYPTION_KEY解码后长度不正确: {len(decoded_key)}字节，应为32字节")
+            except Exception as e:
+                logger.warning(f"环境变量ENCRYPTION_KEY不是有效的base64编码: {str(e)}")
         
         # 最后备用方案：生成新密钥
-        logger.warning("未找到加密密钥，生成新密钥")
+        logger.warning("未找到有效的加密密钥，生成新密钥")
         return Fernet.generate_key()
     
     def _encrypt_password(self, password: str) -> str:

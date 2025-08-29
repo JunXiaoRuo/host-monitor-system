@@ -256,15 +256,20 @@ class ReportGenerator:
         }
         
         .server-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
+            display: block;
         }
         
         .detail-section {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .detail-section .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
         }
         
         .detail-section h4 {
@@ -275,17 +280,27 @@ class ReportGenerator:
         }
         
         .metric {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
+            display: block;
+            margin-bottom: 0;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
         }
         
         .metric-label {
             font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+            color: #495057;
+            font-size: 0.9em;
         }
         
         .metric-value {
             color: #6c757d;
+            display: block;
+            word-break: break-word;
+            font-size: 1.1em;
         }
         
         .metric-high {
@@ -297,6 +312,9 @@ class ReportGenerator:
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
+            table-layout: fixed;
+            max-width: 100%;
+            overflow: hidden;
         }
         
         .disk-table th,
@@ -304,6 +322,38 @@ class ReportGenerator:
             padding: 8px 12px;
             border: 1px solid #dee2e6;
             text-align: left;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .disk-table th:nth-child(1),
+        .disk-table td:nth-child(1) {
+            width: 25%;
+        }
+        
+        .disk-table th:nth-child(2),
+        .disk-table td:nth-child(2) {
+            width: 20%;
+        }
+        
+        .disk-table th:nth-child(3),
+        .disk-table td:nth-child(3) {
+            width: 15%;
+        }
+        
+        .disk-table th:nth-child(4),
+        .disk-table td:nth-child(4) {
+            width: 15%;
+        }
+        
+        .disk-table th:nth-child(5),
+        .disk-table td:nth-child(5) {
+            width: 15%;
+        }
+        
+        .disk-table th:nth-child(6),
+        .disk-table td:nth-child(6) {
+            width: 10%;
         }
         
         .disk-table th {
@@ -340,9 +390,21 @@ class ReportGenerator:
         }
         
         .system-info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 10px;
+            display: block;
+        }
+        
+        .system-info .metric {
+            margin-bottom: 8px;
+            padding: 6px;
+            font-size: 0.9em;
+        }
+        
+        .system-info .metric-label {
+            font-size: 0.8em;
+        }
+        
+        .system-info .metric-value {
+            font-size: 0.9em;
         }
         
         .footer {
@@ -440,6 +502,42 @@ class ReportGenerator:
             
             .server-details {
                 grid-template-columns: 1fr;
+            }
+            
+            .metric {
+                margin-bottom: 8px;
+                padding: 6px;
+            }
+            
+            .metric-label {
+                font-size: 0.75em;
+            }
+            
+            .metric-value {
+                font-size: 0.85em;
+            }
+            
+            .system-info .metric {
+                margin-bottom: 6px;
+                padding: 5px;
+            }
+            
+            .system-info .metric-label {
+                font-size: 0.7em;
+            }
+            
+            .system-info .metric-value {
+                font-size: 0.8em;
+            }
+            
+            .disk-table {
+                font-size: 0.8em;
+            }
+            
+            .disk-table th,
+            .disk-table td {
+                padding: 6px 4px;
+                word-break: break-word;
             }
         }
     </style>
@@ -590,70 +688,72 @@ class ReportGenerator:
                 <div class="server-details">
                     <div class="detail-section">
                         <h4>系统资源</h4>
-                        {% if result.cpu_usage is not none %}
-                        <div class="metric">
-                            <span class="metric-label">CPU使用率:</span>
-                            <span class="metric-value {% if result.cpu_usage > thresholds.cpu_threshold %}metric-high{% endif %}">
-                                {{ "%.2f"|format(result.cpu_usage) }}%
-                            </span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if result.memory_usage is not none %}
-                        <div class="metric">
-                            <span class="metric-label">内存使用率:</span>
-                            <span class="metric-value {% if result.memory_usage > thresholds.memory_threshold %}metric-high{% endif %}">
-                                {{ "%.2f"|format(result.memory_usage) }}%
-                            </span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if result.memory_info %}
-                        <div class="metric">
-                            <span class="metric-label">总内存:</span>
-                            <span class="metric-value">
-                                {% if result.memory_info.total_mb %}
-                                    {{ result.memory_info.total_mb }}MB ({{ result.memory_info.total_gb }}GB)
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">使用内存:</span>
-                            <span class="metric-value">
-                                {% if result.memory_info.used_mb %}
-                                    {{ result.memory_info.used_mb }}MB ({{ result.memory_info.used_gb }}GB)
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">空闲内存:</span>
-                            <span class="metric-value">
-                                {% if result.memory_info.free_mb %}
-                                    {{ result.memory_info.free_mb }}MB ({{ result.memory_info.free_gb }}GB)
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">可用内存:</span>
-                            <span class="metric-value">
-                                {% if result.memory_info.available_mb %}
-                                    {{ result.memory_info.available_mb }}MB ({{ result.memory_info.available_gb }}GB)
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </span>
-                        </div>
-                        {% endif %}
-                        
-                        <div class="metric">
-                            <span class="metric-label">执行耗时:</span>
-                            <span class="metric-value">{{ "%.2f"|format(result.execution_time) }}秒</span>
+                        <div class="metrics-grid">
+                            {% if result.cpu_usage is not none %}
+                            <div class="metric">
+                                <span class="metric-label">CPU使用率:</span>
+                                <span class="metric-value {% if result.cpu_usage > thresholds.cpu_threshold %}metric-high{% endif %}">
+                                    {{ "%.2f"|format(result.cpu_usage) }}%
+                                </span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if result.memory_usage is not none %}
+                            <div class="metric">
+                                <span class="metric-label">内存使用率:</span>
+                                <span class="metric-value {% if result.memory_usage > thresholds.memory_threshold %}metric-high{% endif %}">
+                                    {{ "%.2f"|format(result.memory_usage) }}%
+                                </span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if result.memory_info %}
+                            <div class="metric">
+                                <span class="metric-label">总内存:</span>
+                                <span class="metric-value">
+                                    {% if result.memory_info.total_mb %}
+                                        {{ result.memory_info.total_mb }}MB ({{ result.memory_info.total_gb }}GB)
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">使用内存:</span>
+                                <span class="metric-value">
+                                    {% if result.memory_info.used_mb %}
+                                        {{ result.memory_info.used_mb }}MB ({{ result.memory_info.used_gb }}GB)
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">空闲内存:</span>
+                                <span class="metric-value">
+                                    {% if result.memory_info.free_mb %}
+                                        {{ result.memory_info.free_mb }}MB ({{ result.memory_info.free_gb }}GB)
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">可用内存:</span>
+                                <span class="metric-value">
+                                    {% if result.memory_info.available_mb %}
+                                        {{ result.memory_info.available_mb }}MB ({{ result.memory_info.available_gb }}GB)
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </span>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="metric">
+                                <span class="metric-label">执行耗时:</span>
+                                <span class="metric-value">{{ "%.2f"|format(result.execution_time) }}秒</span>
+                            </div>
                         </div>
                     </div>
                     

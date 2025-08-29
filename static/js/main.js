@@ -4075,12 +4075,7 @@ function showAddNotificationModal() {
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
-                                <label for="notificationContentTemplate" class="form-label">内容模板</label>
-                                <textarea class="form-control" id="notificationContentTemplate" rows="3" 
-                                          placeholder="使用 #context# 作为占位符，例如：主机巡检报告：#context#">主机巡检报告：#context#</textarea>
-                                <div class="form-text">使用 #context# 作为占位符，将会被替换为实际的巡检结果</div>
-                            </div>
+                            <!-- 内容模板字段已移除，用户可直接在请求体模板中使用变量 -->
                             
                             <div class="mb-3">
                                 <label for="notificationRequestBody" class="form-label">请求体模板 (JSON格式)</label>
@@ -4089,7 +4084,63 @@ function showAddNotificationModal() {
   "text": "#context#",
   "channel": "#general"
 }'></textarea>
-                                <div class="form-text">可选，用于自定义请求体格式，留空将使用默认格式</div>
+                                <div class="form-text">可选，用于自定义请求体格式，留空将使用默认格式。可使用 #url# 变量获取报告下载链接</div>
+                            </div>
+                            
+                            <!-- OSS配置区域 -->
+                            <div class="card mt-4">
+                                <div class="card-header">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="ossEnabled">
+                                        <label class="form-check-label" for="ossEnabled">
+                                            <i class="bi bi-cloud-upload"></i> 启用阿里云OSS上传
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="ossConfigSection" style="display: none;">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="ossEndpoint" class="form-label">OSS Endpoint *</label>
+                                                <input type="text" class="form-control" id="ossEndpoint" 
+                                                       placeholder="https://oss-cn-hangzhou.aliyuncs.com">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="ossBucketName" class="form-label">Bucket名称 *</label>
+                                                <input type="text" class="form-control" id="ossBucketName" 
+                                                       placeholder="my-bucket">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="ossAccessKeyId" class="form-label">Access Key ID *</label>
+                                                <input type="text" class="form-control" id="ossAccessKeyId" 
+                                                       placeholder="LTAI...">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="ossAccessKeySecret" class="form-label">Access Key Secret *</label>
+                                                <input type="password" class="form-control" id="ossAccessKeySecret" 
+                                                       placeholder="密钥">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="ossFolderPath" class="form-label">存储文件夹路径</label>
+                                        <input type="text" class="form-control" id="ossFolderPath" 
+                                               placeholder="reports" value="reports">
+                                        <div class="form-text">可选，默认为 reports，用于组织文件存储结构</div>
+                                    </div>
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i>
+                                        启用OSS上传后，系统会自动将生成的巡检报告上传到阿里云OSS，并在通知中提供 #url# 变量用于获取下载链接。
+                                    </div>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -4103,6 +4154,17 @@ function showAddNotificationModal() {
     `;
     
     document.getElementById('modalContainer').innerHTML = modalHtml;
+    
+    // 添加OSS开关事件监听器
+    document.getElementById('ossEnabled').addEventListener('change', function() {
+        const ossConfigSection = document.getElementById('ossConfigSection');
+        if (this.checked) {
+            ossConfigSection.style.display = 'block';
+        } else {
+            ossConfigSection.style.display = 'none';
+        }
+    });
+    
     const modal = new bootstrap.Modal(document.getElementById('notificationModal'));
     modal.show();
 }
@@ -4118,8 +4180,15 @@ function saveNotificationChannel() {
         method: document.getElementById('notificationMethod').value,
         timeout: parseInt(document.getElementById('notificationTimeout').value),
         is_enabled: document.getElementById('notificationEnabled').checked,
-        content_template: document.getElementById('notificationContentTemplate').value.trim(),
-        request_body: document.getElementById('notificationRequestBody').value.trim()
+        // content_template字段已移除，直接在请求体模板中使用变量
+        request_body: document.getElementById('notificationRequestBody').value.trim(),
+        // OSS配置
+        oss_enabled: document.getElementById('ossEnabled').checked,
+        oss_endpoint: document.getElementById('ossEndpoint').value.trim(),
+        oss_access_key_id: document.getElementById('ossAccessKeyId').value.trim(),
+        oss_access_key_secret: document.getElementById('ossAccessKeySecret').value.trim(),
+        oss_bucket_name: document.getElementById('ossBucketName').value.trim(),
+        oss_folder_path: document.getElementById('ossFolderPath').value.trim()
     };
     
     // 验证必填字段
@@ -4142,6 +4211,20 @@ function saveNotificationChannel() {
             JSON.parse(data.request_body);
         } catch (e) {
             showAlert('请求体模板格式不正确，请输入正确的JSON格式', 'warning');
+            return;
+        }
+    }
+    
+    // 验证OSS配置
+    if (data.oss_enabled) {
+        if (!data.oss_endpoint || !data.oss_access_key_id || !data.oss_access_key_secret || !data.oss_bucket_name) {
+            showAlert('启用OSS上传时，请填写完整的OSS配置信息', 'warning');
+            return;
+        }
+        
+        // 验证Endpoint格式
+        if (!data.oss_endpoint.startsWith('http://') && !data.oss_endpoint.startsWith('https://')) {
+            showAlert('OSS Endpoint格式不正确，请以http://或https://开头', 'warning');
             return;
         }
     }
@@ -4235,16 +4318,73 @@ function showEditNotificationModal(channelId) {
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
-                                <label for="notificationContentTemplate" class="form-label">内容模板</label>
-                                <textarea class="form-control" id="notificationContentTemplate" rows="3">${channel.content_template || ''}</textarea>
-                                <div class="form-text">使用 #context# 作为占位符，将会被替换为实际的巡检结果</div>
-                            </div>
+                            <!-- 内容模板字段已移除，用户可直接在请求体模板中使用变量 -->
                             
                             <div class="mb-3">
                                 <label for="notificationRequestBody" class="form-label">请求体模板 (JSON格式)</label>
                                 <textarea class="form-control" id="notificationRequestBody" rows="4">${channel.request_body || ''}</textarea>
-                                <div class="form-text">可选，用于自定义请求体格式，留空将使用默认格式</div>
+                                <div class="form-text">可选，用于自定义请求体格式，留空将使用默认格式。支持变量：#context#（巡检结果）、#url#（报告下载链接，需启用OSS）</div>
+                            </div>
+                            
+                            <!-- 阿里云OSS配置 -->
+                            <div class="card mt-3">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-cloud-upload"></i>
+                                        阿里云OSS配置
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="ossEnabled" ${channel.oss_enabled ? 'checked' : ''}>
+                                            <label class="form-check-label" for="ossEnabled">启用OSS上传报告</label>
+                                        </div>
+                                        <div class="form-text">启用后，生成的巡检报告将自动上传到阿里云OSS，并在通知中提供下载链接</div>
+                                    </div>
+                                    
+                                    <div id="ossConfigSection" style="display: ${channel.oss_enabled ? 'block' : 'none'}">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="ossEndpoint" class="form-label">Endpoint *</label>
+                                                    <input type="text" class="form-control" id="ossEndpoint" value="${channel.oss_endpoint || ''}" placeholder="https://oss-cn-hangzhou.aliyuncs.com">
+                                                    <div class="form-text">OSS服务的访问域名</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="ossBucketName" class="form-label">Bucket名称 *</label>
+                                                    <input type="text" class="form-control" id="ossBucketName" value="${channel.oss_bucket_name || ''}" placeholder="my-bucket">
+                                                    <div class="form-text">存储报告的Bucket名称</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="ossAccessKeyId" class="form-label">Access Key ID *</label>
+                                                    <input type="text" class="form-control" id="ossAccessKeyId" value="${channel.oss_access_key_id || ''}">
+                                                    <div class="form-text">阿里云访问密钥ID</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="ossAccessKeySecret" class="form-label">Access Key Secret *</label>
+                                                    <input type="password" class="form-control" id="ossAccessKeySecret" value="${channel.oss_access_key_secret || ''}">
+                                                    <div class="form-text">阿里云访问密钥Secret</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="ossFolderPath" class="form-label">存储文件夹路径</label>
+                                            <input type="text" class="form-control" id="ossFolderPath" value="${channel.oss_folder_path || ''}" placeholder="reports/">
+                                            <div class="form-text">可选，报告在OSS中的存储路径，留空则存储在根目录</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -4258,6 +4398,17 @@ function showEditNotificationModal(channelId) {
     `;
     
     document.getElementById('modalContainer').innerHTML = modalHtml;
+    
+    // 为OSS开关添加事件监听器
+    document.getElementById('ossEnabled').addEventListener('change', function() {
+        const ossConfigSection = document.getElementById('ossConfigSection');
+        if (this.checked) {
+            ossConfigSection.style.display = 'block';
+        } else {
+            ossConfigSection.style.display = 'none';
+        }
+    });
+    
     const modal = new bootstrap.Modal(document.getElementById('notificationModal'));
     modal.show();
 }

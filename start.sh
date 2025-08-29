@@ -25,6 +25,8 @@ if [ ! -f ".env" ]; then
     cp .env.example .env
     echo "✅ 请编辑 .env 文件配置系统参数"
     echo "🔑 特别注意修改 SECRET_KEY 和 ENCRYPTION_KEY"
+    echo SECRET_KEY密钥生成命令：python -c "import secrets; print(secrets.token_urlsafe(32))"
+    echo ENCRYPTION_KEY密钥生成命令：python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     echo ""
     echo "配置完成后请重新运行此脚本"
     exit 0

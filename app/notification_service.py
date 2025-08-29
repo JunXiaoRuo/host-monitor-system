@@ -8,6 +8,7 @@ import requests
 from datetime import datetime
 from app.models import db, NotificationChannel
 import logging
+from app.oss_service import OSSService
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,8 @@ class NotificationService:
     
     def __init__(self):
         self.default_timeout = 30
+        # 初始化OSS服务
+        self.oss_service = OSSService()
     
     def create_channel(self, data):
         """创建通知通道"""
@@ -24,8 +27,16 @@ class NotificationService:
                 name=data['name'],
                 webhook_url=data['webhook_url'],
                 method=data.get('method', 'POST'),
-                content_template=data.get('content_template', ''),
-                timeout=data.get('timeout', self.default_timeout)
+                # content_template字段已移除，直接在请求体模板中使用变量
+                timeout=data.get('timeout', self.default_timeout),
+                is_enabled=data.get('is_enabled', True),
+                # OSS配置字段
+                oss_enabled=data.get('oss_enabled', False),
+                oss_endpoint=data.get('oss_endpoint', ''),
+                oss_access_key_id=data.get('oss_access_key_id', ''),
+                oss_access_key_secret=data.get('oss_access_key_secret', ''),
+                oss_bucket_name=data.get('oss_bucket_name', ''),
+                oss_folder_path=data.get('oss_folder_path', '')
             )
             
             # 设置请求体模板
@@ -57,8 +68,7 @@ class NotificationService:
                 channel.webhook_url = data['webhook_url']
             if 'method' in data:
                 channel.method = data.get('method', 'POST')
-            if 'content_template' in data:
-                channel.content_template = data.get('content_template', '')
+            # content_template字段已移除，直接在请求体模板中使用变量
             if 'is_enabled' in data:
                 channel.is_enabled = data.get('is_enabled', True)
             if 'timeout' in data:
@@ -106,7 +116,7 @@ class NotificationService:
             logger.error(f"获取通知通道列表失败: {str(e)}")
             return []
     
-    def send_notification(self, monitor_result):
+    def send_notification(self, monitor_result, report_file_path=None):
         """发送巡视报告通知"""
         try:
             # 获取所有启用的通知通道
@@ -122,7 +132,27 @@ class NotificationService:
             success_count = 0
             for channel in channels:
                 try:
-                    if self._send_to_channel(channel, content):
+                    # 处理OSS上传和URL变量
+                    download_url = None
+                    logger.info(f"通道 {channel.name}: OSS启用状态={channel.oss_enabled}, 报告文件路径={report_file_path}")
+                    
+                    if channel.oss_enabled and report_file_path:
+                        logger.info(f"开始上传报告到OSS - 通道: {channel.name}")
+                        download_url = self._upload_to_oss_and_get_url(channel, report_file_path)
+                        if not download_url:
+                            download_url = '报告上传失败，请检查OSS配置'
+                            logger.error(f"OSS上传失败 - 通道: {channel.name}")
+                        else:
+                            logger.info(f"OSS上传成功 - 通道: {channel.name}, URL: {download_url}")
+                    else:
+                        if not channel.oss_enabled:
+                            logger.info(f"通道 {channel.name} 未启用OSS")
+                        if not report_file_path:
+                            logger.info(f"通道 {channel.name} 没有报告文件路径")
+                        download_url = '未配置OSS存储，无法提供下载链接'
+                    
+                    # 不在这里替换#url#变量，让_send_to_channel方法统一处理
+                    if self._send_to_channel(channel, content, download_url):
                         success_count += 1
                 except Exception as e:
                     logger.error(f"发送通知失败 - 通道: {channel.name}, 错误: {str(e)}")
@@ -134,6 +164,46 @@ class NotificationService:
         except Exception as e:
             logger.error(f"发送通知失败: {str(e)}")
             return False, f"发送通知失败: {str(e)}"
+    
+    def _upload_to_oss_and_get_url(self, channel, report_file_path):
+        """上传报告到OSS并获取下载链接"""
+        try:
+            # 配置OSS服务
+            if not self.oss_service.configure(
+                endpoint=channel.oss_endpoint,
+                access_key_id=channel.oss_access_key_id,
+                access_key_secret=channel.oss_access_key_secret,
+                bucket_name=channel.oss_bucket_name,
+                folder_path=channel.oss_folder_path or "reports"
+            ):
+                logger.error(f"OSS配置失败 - 通道: {channel.name}")
+                return None
+            
+            # 生成远程文件名（包含时间戳）
+            import os
+            from datetime import datetime
+            file_name = os.path.basename(report_file_path)
+            name, ext = os.path.splitext(file_name)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            remote_file_name = f"{name}_{timestamp}{ext}"
+            
+            # 上传文件并获取下载链接
+            success, message, download_url = self.oss_service.upload_and_get_url(
+                local_file_path=report_file_path,
+                remote_file_name=remote_file_name,
+                expires_in_hours=24  # 链接有效期24小时
+            )
+            
+            if success:
+                logger.info(f"OSS上传成功 - 通道: {channel.name}, URL: {download_url}")
+                return download_url
+            else:
+                logger.error(f"OSS上传失败 - 通道: {channel.name}, 错误: {message}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"OSS上传异常 - 通道: {channel.name}, 错误: {str(e)}")
+            return None
     
     def _simplify_error_message(self, error_msg):
         """简化错误信息，提供用户友好的错误描述"""
@@ -219,23 +289,20 @@ class NotificationService:
                 for detail in failed_details:  # 显示所有异常
                     content += f"\n- {detail}"
             
+            # 移除报告下载链接占位符，用户可在请求体模板中自定义
+            
             return content
             
         except Exception as e:
             logger.error(f"生成通知内容失败: {str(e)}")
             return f"主机巡检结果\n时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n结果: 处理异常"
     
-    def _send_to_channel(self, channel, content):
+    def _send_to_channel(self, channel, content, url=None):
         """发送通知到指定通道"""
         try:
-            # 替换内容变量
-            final_content = content
-            if channel.content_template:
-                final_content = channel.content_template.replace('#context#', content)
-            
             if channel.method.upper() == 'GET':
                 # GET请求，将内容作为参数发送
-                params = {'message': final_content}
+                params = {'message': content}
                 response = requests.get(
                     channel.webhook_url,
                     params=params,
@@ -248,7 +315,7 @@ class NotificationService:
                     try:
                         body_template = json.loads(channel.request_body)
                         # 递归替换所有字符串值中的变量
-                        body = self._replace_variables_in_dict(body_template, final_content)
+                        body = self._replace_variables_in_dict(body_template, content, url)
                         headers = {'Content-Type': 'application/json'}
                         response = requests.post(
                             channel.webhook_url,
@@ -258,14 +325,17 @@ class NotificationService:
                         )
                     except json.JSONDecodeError:
                         # 如果不是有效JSON，直接作为文本发送
+                        request_body = channel.request_body.replace('#context#', content)
+                        if url is not None:
+                            request_body = request_body.replace('#url#', url)
                         response = requests.post(
                             channel.webhook_url,
-                            data=channel.request_body.replace('#context#', final_content),
+                            data=request_body,
                             timeout=channel.timeout
                         )
                 else:
                     # 默认JSON格式
-                    data = {'message': final_content}
+                    data = {'message': content}
                     headers = {'Content-Type': 'application/json'}
                     response = requests.post(
                         channel.webhook_url,
@@ -289,13 +359,16 @@ class NotificationService:
             logger.error(f"发送通知异常 - 通道: {channel.name}, 错误: {str(e)}")
             return False
     
-    def _replace_variables_in_dict(self, data, content):
+    def _replace_variables_in_dict(self, data, content, url=None):
         """递归替换字典中的变量"""
         if isinstance(data, dict):
-            return {k: self._replace_variables_in_dict(v, content) for k, v in data.items()}
+            return {k: self._replace_variables_in_dict(v, content, url) for k, v in data.items()}
         elif isinstance(data, list):
-            return [self._replace_variables_in_dict(item, content) for item in data]
+            return [self._replace_variables_in_dict(item, content, url) for item in data]
         elif isinstance(data, str):
-            return data.replace('#context#', content)
+            result = data.replace('#context#', content)
+            if url is not None:
+                result = result.replace('#url#', url)
+            return result
         else:
             return data

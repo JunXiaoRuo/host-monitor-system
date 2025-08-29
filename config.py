@@ -48,7 +48,14 @@ class Config:
     SCHEDULER_API_ENABLED = os.environ.get('SCHEDULER_API_ENABLED', 'True').lower() in ['true', '1', 'yes']
     
     # 加密配置
-    ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY') or SECRET_KEY
+    ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
+    # 如果没有设置ENCRYPTION_KEY，生成一个新的Fernet密钥
+    if not ENCRYPTION_KEY:
+        from cryptography.fernet import Fernet
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("未设置ENCRYPTION_KEY环境变量，生成临时密钥（重启后会丢失）")
+        ENCRYPTION_KEY = Fernet.generate_key().decode()
     
     # 性能配置
     MAX_CONCURRENT_MONITORS = int(os.environ.get('MAX_CONCURRENT_MONITORS') or 10)

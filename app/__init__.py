@@ -691,7 +691,7 @@ def create_app(config_object='config.Config'):
             notification_success = False
             notification_message = ""
             try:
-                notification_success, notification_message = notification_service.send_notification(result)
+                notification_success, notification_message = notification_service.send_notification(result, report_path)
                 logger.info(f"通知发送结果: {notification_message}")
             except Exception as notify_error:
                 logger.error(f"发送通知失败: {str(notify_error)}")
@@ -1258,6 +1258,20 @@ def create_app(config_object='config.Config'):
                 channel.timeout = data['timeout']
             if 'request_body' in data:
                 channel.set_request_body_template(data['request_body'])
+            
+            # 更新OSS配置字段
+            if 'oss_enabled' in data:
+                channel.oss_enabled = data['oss_enabled']
+            if 'oss_endpoint' in data:
+                channel.oss_endpoint = data['oss_endpoint']
+            if 'oss_access_key_id' in data:
+                channel.oss_access_key_id = data['oss_access_key_id']
+            if 'oss_access_key_secret' in data:
+                channel.oss_access_key_secret = data['oss_access_key_secret']
+            if 'oss_bucket_name' in data:
+                channel.oss_bucket_name = data['oss_bucket_name']
+            if 'oss_folder_path' in data:
+                channel.oss_folder_path = data['oss_folder_path']
             
             channel.updated_at = datetime.now()
             db.session.commit()

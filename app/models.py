@@ -235,9 +235,18 @@ class NotificationChannel(db.Model):
     webhook_url = db.Column(db.String(500), nullable=False, comment='Webhook URL')
     method = db.Column(db.String(10), default='POST', comment='请求方式: GET/POST')
     request_body = db.Column(db.Text, comment='请求体模板(JSON格式)')
-    content_template = db.Column(db.Text, comment='内容变量模板')
+    # content_template字段已移除，用户可直接在请求体模板中使用变量
     is_enabled = db.Column(db.Boolean, default=True, comment='是否启用')
     timeout = db.Column(db.Integer, default=30, comment='超时时间(秒)')
+    
+    # 阿里云OSS配置
+    oss_enabled = db.Column(db.Boolean, default=False, comment='是否启用OSS上传')
+    oss_endpoint = db.Column(db.String(200), comment='OSS Endpoint')
+    oss_access_key_id = db.Column(db.String(100), comment='OSS Access Key ID')
+    oss_access_key_secret = db.Column(db.String(100), comment='OSS Access Key Secret')
+    oss_bucket_name = db.Column(db.String(100), comment='OSS Bucket名称')
+    oss_folder_path = db.Column(db.String(200), comment='OSS存储文件夹路径')
+    
     created_at = db.Column(db.DateTime, default=get_local_time)
     updated_at = db.Column(db.DateTime, default=get_local_time, onupdate=get_local_time)
     
@@ -264,9 +273,15 @@ class NotificationChannel(db.Model):
             'webhook_url': self.webhook_url,
             'method': self.method,
             'request_body': self.request_body,
-            'content_template': self.content_template,
+            # content_template字段已移除
             'is_enabled': self.is_enabled,
             'timeout': self.timeout,
+            'oss_enabled': self.oss_enabled,
+            'oss_endpoint': self.oss_endpoint,
+            'oss_access_key_id': self.oss_access_key_id,
+            'oss_access_key_secret': self.oss_access_key_secret,
+            'oss_bucket_name': self.oss_bucket_name,
+            'oss_folder_path': self.oss_folder_path,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
