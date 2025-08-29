@@ -142,7 +142,7 @@ echo 完成! 现在可以运行: start.bat|start.sh
 pause
 """
     
-    with open("install_offline.bat", "w", encoding="utf-8") as f:
+    with open("install_offline.bat", "w", encoding="GBK") as f:
         f.write(install_script)
     
     # 统计文件
@@ -155,7 +155,7 @@ pause
     print(f"\n📋 接下来的步骤:")
     print(f"1. 将整个项目文件夹复制到内网机器")
     print(f"2. 在内网机器上双击运行 install_offline.bat")
-    print(f"3. 运行 start.bat|start.sh 启动服务")
+    print(f"3. 运行 start.bat/start.sh 启动服务")
 
 if __name__ == "__main__":
     main()
