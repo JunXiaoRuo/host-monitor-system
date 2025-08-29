@@ -71,7 +71,7 @@ def main():
         return
     
     # 下载静态资源
-    download_static_resources()
+    # download_static_resources()
     
     # 创建依赖包目录
     packages_dir = Path("python-packages")
@@ -99,7 +99,7 @@ def main():
         packages = [
             "Flask==2.3.3", "Flask-SQLAlchemy==3.0.5", "paramiko==3.3.1",
             "APScheduler==3.10.4", "psutil==5.9.6", "requests==2.31.0",
-            "python-dotenv==1.0.0", "pandas==2.0.3", "openpyxl==3.1.2"
+            "python-dotenv==1.0.0", "pandas==2.0.3", "openpyxl==3.1.2","oss2==2.18.4","pyOpenSSL==25.1.0"
         ]
         
         for pkg in packages:
