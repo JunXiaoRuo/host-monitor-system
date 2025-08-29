@@ -102,9 +102,16 @@ python start_production.py
 #### 方式一：使用自动化脚本（推荐）
 
 ```bash
-# 运行依赖包下载脚本
+# 运行依赖包和静态资源下载脚本
 python quick_prepare.py
 ```
+
+此脚本会自动：
+- 下载所有Python依赖包
+- 下载Bootstrap CSS/JS文件到本地
+- 下载Bootstrap Icons字体文件
+- 自动修复字体路径引用
+- 生成离线安装脚本
 
 #### 方式二：使用批处理脚本
 
@@ -150,15 +157,8 @@ cp .env.example .env
 # 编辑配置（如果需要）
 vim .env
 
-# 快速启动脚本
-windows用户双击start.bat
-macOS/Linux用户执行start.sh
-
-# 开发环境启动
+# 启动服务
 python run.py
-
-# 生产环境启动
-python start_production.py
 ```
 
 ### 离线部署验证
@@ -170,9 +170,15 @@ python start_production.py
    python -c "import pandas; print('Pandas 已安装')"
    ```
 
-2. **访问系统**：浏览器打开 `http://localhost:5000`
+2. **验证静态资源本地化**：
+   ```bash
+   # 运行验证脚本检查所有资源
+   python verify_offline.py
+   ```
 
-3. **功能测试**：登录后添加测试服务器，执行监控验证
+3. **访问系统**：浏览器打开 `http://localhost:5000`
+
+4. **功能测试**：登录后添加测试服务器，执行监控验证
 
 ### 离线部署注意事项
 
@@ -258,8 +264,15 @@ python reset_password.py admin newpassword123
 │   ├── login.html              # 登录页面模板
 │   └── setup.html              # 初始化设置页面
 ├── static/                      # 静态资源文件
-│   └── js/
-│       └── main.js             # 主要JavaScript逻辑
+│   ├── css/                    # CSS样式文件
+│   │   ├── bootstrap.min.css   # Bootstrap框架样式（本地化）
+│   │   └── bootstrap-icons.css # Bootstrap图标样式（本地化）
+│   ├── js/                     # JavaScript脚本文件
+│   │   ├── main.js             # 主要JavaScript逻辑
+│   │   └── bootstrap.bundle.min.js # Bootstrap框架脚本（本地化）
+│   └── fonts/                  # 字体文件
+│       ├── bootstrap-icons.woff  # Bootstrap图标字体
+│       └── bootstrap-icons.woff2 # Bootstrap图标字体
 ├── instance/                    # Flask实例配置目录
 │   └── host_monitor.db         # SQLite数据库文件
 ├── reports/                     # 生成的监控报告
