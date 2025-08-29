@@ -167,8 +167,8 @@ function updateServerStatusList(serverStatus) {
                     </div>
                 </div>
                 <div class="row mt-2">
-                    <div class="col-md-3"><small>CPU: ${status.cpu_usage ? status.cpu_usage.toFixed(1) + '%' : 'N/A'}</small></div>
-                    <div class="col-md-3"><small>内存: ${status.memory_usage ? status.memory_usage.toFixed(1) + '%' : 'N/A'}</small></div>
+                    <div class="col-md-3"><small>CPU: ${status.cpu_usage !== null && status.cpu_usage !== undefined ? status.cpu_usage.toFixed(1) + '%' : 'N/A'}</small></div>
+                    <div class="col-md-3"><small>内存: ${status.memory_usage !== null && status.memory_usage !== undefined ? status.memory_usage.toFixed(1) + '%' : 'N/A'}</small></div>
                     <div class="col-md-3"><small>告警: ${status.alert_count || 0}个</small></div>
                     <div class="col-md-3"><small>耗时: ${status.execution_time ? status.execution_time.toFixed(2) + 's' : 'N/A'}</small></div>
                 </div>
@@ -2198,7 +2198,7 @@ function showLogDetailModal(logData) {
                                         <div class="row mb-2">
                                             <div class="col-4"><strong>CPU使用率:</strong></div>
                                             <div class="col-8">
-                                                ${logData.cpu_usage ? `
+                                                ${logData.cpu_usage !== null && logData.cpu_usage !== undefined ? `
                                                     <span class="${(() => {
                                                         const cpuThreshold = thresholdsData?.cpu_threshold || 80;
                                                         const isOverThreshold = logData.cpu_usage > cpuThreshold;

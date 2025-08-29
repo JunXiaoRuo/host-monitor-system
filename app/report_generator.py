@@ -600,8 +600,8 @@ class ReportGenerator:
                 </div>
                 {% endfor %}
                 <div class="alert-server-summary">
-                    <span>CPU: {{ server.cpu_usage|round(1) if server.cpu_usage else 'N/A' }}%</span> | 
-                    <span>内存: {{ server.memory_usage|round(1) if server.memory_usage else 'N/A' }}%</span> | 
+                    <span>CPU: {{ server.cpu_usage|round(1) if server.cpu_usage is not none else 'N/A' }}%</span> | 
+                    <span>内存: {{ server.memory_usage|round(1) if server.memory_usage is not none else 'N/A' }}%</span> | 
                     <span>磁盘告警: {{ server.alerts|selectattr('type', 'equalto', 'disk')|list|length }}个</span>
                 </div>
             </div>
