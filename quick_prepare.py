@@ -85,30 +85,26 @@ def main():
     
     # 下载依赖包
     print("📦 下载依赖包...")
+    
+    # 读取requirements.txt获取包列表
+    with open('requirements.txt', 'r', encoding='utf-8') as f:
+        packages = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+    
+    print(f"📋 需要下载 {len(packages)} 个包:")
+    for i, pkg in enumerate(packages, 1):
+        print(f"  {i:2d}. {pkg}")
+    
+    print("\n🔄 开始下载...")
     cmd = f"pip download -r requirements.txt --dest {packages_dir}"
     
     try:
         result = subprocess.run(cmd, shell=True, check=True, 
-                              capture_output=True, text=True)
-        print("✅ 依赖包下载完成")
+                              capture_output=False, text=True)
+        print("\n✅ 依赖包下载完成")
     except subprocess.CalledProcessError as e:
         print(f"❌ 下载失败: {e}")
-        print("🔧 尝试手动下载主要包...")
-        
-        # 手动下载主要包
-        packages = [
-            "Flask==2.3.3", "Flask-SQLAlchemy==3.0.5", "paramiko==3.3.1",
-            "APScheduler==3.10.4", "psutil==5.9.6", "requests==2.31.0",
-            "python-dotenv==1.0.0", "pandas==2.0.3", "openpyxl==3.1.2","oss2==2.18.4","pyOpenSSL==25.1.0"
-        ]
-        
-        for pkg in packages:
-            try:
-                subprocess.run(f"pip download {pkg} --dest {packages_dir}", 
-                             shell=True, check=True, capture_output=True)
-                print(f"✅ {pkg}")
-            except:
-                print(f"⚠️ {pkg} 下载失败")
+        print("请检查网络连接或依赖版本冲突")
+        return False
     
     # 创建安装脚本
     install_script = """@echo off
