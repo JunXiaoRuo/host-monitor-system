@@ -2033,8 +2033,8 @@ function renderLogsTable(logs) {
                 <td>
                     <span class="badge bg-${statusClass}">${log.status}</span>
                 </td>
-                <td>${log.cpu_usage ? log.cpu_usage.toFixed(1) + '%' : 'N/A'}</td>
-                <td>${log.memory_usage ? log.memory_usage.toFixed(1) + '%' : 'N/A'}</td>
+                <td>${log.cpu_usage !== null && log.cpu_usage !== undefined ? log.cpu_usage.toFixed(1) + '%' : 'N/A'}</td>
+                <td>${log.memory_usage !== null && log.memory_usage !== undefined ? log.memory_usage.toFixed(1) + '%' : 'N/A'}</td>
                 <td>${log.alert_info ? log.alert_info.length : 0}</td>
                 <td>${log.execution_time ? log.execution_time.toFixed(2) + 's' : 'N/A'}</td>
                 <td>
