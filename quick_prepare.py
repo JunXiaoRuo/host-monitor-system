@@ -95,6 +95,20 @@ def main():
         print(f"  {i:2d}. {pkg}")
     
     print("\n🔄 开始下载...")
+    
+    # 首先下载构建依赖
+    print("📦 下载构建依赖...")
+    build_deps = ["setuptools", "wheel", "pip"]
+    for dep in build_deps:
+        try:
+            subprocess.run(f"pip download {dep} --dest {packages_dir}", 
+                         shell=True, check=True, capture_output=True)
+            print(f"✅ {dep}")
+        except subprocess.CalledProcessError:
+            print(f"⚠️ {dep} 下载失败")
+    
+    # 下载项目依赖
+    print("\n📦 下载项目依赖...")
     cmd = f"pip download -r requirements.txt --dest {packages_dir}"
     
     try:
