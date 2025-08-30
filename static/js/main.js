@@ -173,8 +173,8 @@ function renderOSSConfigModal(ossConfig) {
                                 <i class="bi bi-info-circle"></i>
                                 <strong>说明：</strong>
                                 <ul class="mb-0 mt-2">
-                                    <li>配置后，所有启用的通知通道都将使用此OSS配置，请求体中变量为#url#</li>
-                                    <li>报告文件将自动上传到OSS，并在通知中提供下载链接</li>
+                                    <li>配置后，所有启用的通知通道都将使用此OSS配置</li>
+                                    <li>报告文件将自动上传到OSS，并在通知中提供下载链接，请求体中变量为#url#</li>
                                     <li>请确保OSS配置正确，否则可能影响通知发送</li>
                                 </ul>
                             </div>
