@@ -866,6 +866,135 @@ grep -r "SSH" logs/flask-*.log | tail -10
 - **链接有效期**: 下载链接默认有效期为24小时
 - **存储路径**: 如果指定了存储文件夹路径，文件将存储在该路径下
 
+#### OSS安全配置（重要）
+
+**⚠️ 安全警告**: 为了防止报告文件被未授权访问，必须正确配置OSS Bucket的访问权限。
+
+**推荐的安全配置步骤**:
+
+1. **设置Bucket为私有读写**
+   - 登录阿里云OSS控制台：https://oss.console.aliyun.com
+   - 选择您的Bucket
+   - 进入「权限控制」→「读写权限」
+   - 设置为「私有」（Private）
+   - 确保「公共读」和「公共读写」都处于关闭状态
+
+2. **RAM用户权限配置**
+   
+   为监控系统创建专用的RAM用户，并授予最小必要权限：
+   
+   **步骤一：创建RAM用户（已创建直接看步骤二）**
+   - 登录阿里云控制台：https://ram.console.aliyun.com
+   - 点击「身份管理」→「用户」→「创建用户」
+   - 填写用户信息（如：`monitor-system-user`）
+   - 访问方式勾选「编程访问或者使用永久 AccessKey 访问」获取AccessKey
+   - 保存生成的AccessKey ID和AccessKey Secret
+   
+   **步骤二：创建自定义权限策略**
+   - 进入「权限管理」→「权限策略管理」→「创建权限策略」
+   - 策略名称：`MonitorSystemOSSPolicy`
+   - 选择「脚本配置」，使用以下策略内容（替换两个`your-bucket-name`为您的Bucket名称）
+   - 点击「身份管理」→「用户」→ 「选择刚刚创建的用户点击进去」→「权限策略」→「新增授权」→ 输入「MonitorSystemOSSPolicy」
+   - 在「身份管理」→「用户」→ 「选择刚刚创建的用户点击进去」→「权限策略」中可以把其它没有用的的权限策略都去掉
+   
+   ```json
+   {
+   "Version": "1",
+   "Statement": [
+      {
+         "Effect": "Allow",
+         "Action": [
+         "oss:PutObject",
+         "oss:GetObject",
+         "oss:DeleteObject",
+         "oss:GetObjectMeta",
+         "oss:GetObjectAcl",
+         "oss:PutObjectAcl"
+         ],
+         "Resource": "acs:oss:*:*:your-bucket-name/reports/*"
+      },
+      {
+         "Effect": "Allow",
+         "Action": [
+         "oss:ListObjects",
+         "oss:ListObjectsV2",
+         "oss:GetBucketLocation",
+         "oss:GetBucketInfo",
+         "oss:GetBucketAcl"
+         ],
+         "Resource": "acs:oss:*:*:your-bucket-name"
+      },
+      {
+         "Effect": "Allow",
+         "Action": [
+         "oss:ListBuckets"
+         ],
+         "Resource": "*"
+      }
+   ]
+   }
+   ```
+   
+   **步骤三：为RAM用户授权**
+   - 返回「身份管理」→「用户」，找到创建的用户
+   - 点击「添加权限」，选择刚创建的自定义策略
+   - 完成授权配置
+   
+   **权限说明**：
+   - `oss:PutObject`：上传文件权限
+   - `oss:GetObject`：下载文件权限（用于生成预签名URL）
+   - `oss:DeleteObject`：删除文件权限（可选，用于清理旧报告）
+   - `oss:GetObjectMeta`：获取文件元信息
+   - `oss:ListObjects`：列出文件权限（限制在指定Bucket）
+   
+   权限范围限制在 `reports/*` 路径下，确保只能访问报告文件夹。
+   
+   **⚠️ 重要提醒**：请将上述策略中的 `your-bucket-name` 替换为您实际的Bucket名称，确保权限策略正确生效。
+
+3. **验证安全配置**
+   
+   配置完成后，请验证以下几点：
+   
+   - ✅ 直接访问OSS文件URL（不带签名参数）应该返回403错误
+   - ✅ 通过系统生成的预签名URL可以正常下载
+   - ✅ 预签名URL在过期后无法访问
+   
+   **测试命令**:
+   ```bash
+   # 测试直接访问（应该失败）
+   curl -I "https://your-bucket.oss-region.aliyuncs.com/reports/report_xxx.html"
+   # 预期结果: HTTP/1.1 403 Forbidden
+   
+   # 测试预签名URL访问（应该成功）
+   curl -I "https://your-bucket.oss-region.aliyuncs.com/reports/report_xxx.html?Expires=xxx&OSSAccessKeyId=xxx&Signature=xxx"
+   # 预期结果: HTTP/1.1 200 OK
+   ```
+
+**安全最佳实践**:
+
+- 🔒 **永远不要**将Bucket设置为公共读或公共读写
+- 🔑 **定期轮换**Access Key ID和Secret
+- 📝 **监控访问日志**，及时发现异常访问
+- ⏰ **合理设置**预签名URL有效期（系统支持自定义配置，默认24小时）
+- 🗂️ **使用专用文件夹**存储报告文件，便于权限管理
+- 🚫 **启用防盗链**功能，限制访问来源
+- 🔐 **最小权限原则**：仅授予必要的OSS操作权限
+- 📋 **定期审查**RAM用户权限，移除不必要的权限策略
+
+**报告有效期配置**:
+
+系统支持自定义OSS报告下载链接的有效期，提供灵活的安全控制：
+
+- **配置位置**: 在通知通道配置中，找到「报告下载链接有效期(小时)」字段
+- **有效期范围**: 1-168小时（1小时到7天）
+- **默认值**: 24小时
+- **推荐设置**:
+  - 内部团队使用：24-48小时
+  - 外部分享：1-6小时
+  - 紧急情况：1-2小时
+- **安全建议**: 根据实际需求设置最短有效期，避免长期有效的下载链接带来的安全风险
+- **自动清理**: 系统会自动生成带有过期时间的预签名URL，过期后自动失效
+
 #### 变量说明
 
 在通知模板中可以使用以下变量：
@@ -880,22 +1009,38 @@ grep -r "SSH" logs/flask-*.log | tail -10
 **OSS上传失败常见问题**:
 
 1. **配置错误**
-   - 检查Endpoint格式是否正确
-   - 验证Access Key ID和Secret是否有效
-   - 确认Bucket名称是否存在
+   - 检查Endpoint格式是否正确（如：`https://oss-cn-hangzhou.aliyuncs.com`）
+   - 验证Access Key ID和Secret是否有效且未过期
+   - 确认Bucket名称是否存在且拼写正确
+   - 检查存储文件夹路径格式（如：`reports/` 或 `monitor-reports/`）
 
 2. **权限问题**
-   - 确保RAM用户有OSS读写权限
-   - 检查Bucket的访问权限设置
+   - 确保RAM用户已授权自定义的 `MonitorSystemOSSPolicy` 策略
+   - 检查权限策略中的Bucket名称是否与实际配置一致
+   - 验证RAM用户是否有 `oss:PutObject` 和 `oss:GetObject` 权限
+   - 确认Bucket的访问权限设置为「私有」
 
 3. **网络问题**
-   - 确认服务器能访问OSS服务
-   - 检查防火墙设置
+   - 确认服务器能访问OSS服务（测试：`ping oss-cn-hangzhou.aliyuncs.com`）
+   - 检查防火墙是否阻止HTTPS(443)端口
+   - 验证DNS解析是否正常
 
 4. **文件上传失败**
    - 查看系统日志中的详细错误信息
-   - 检查本地报告文件是否存在
-   - 确认存储空间是否充足
+   - 检查本地报告文件是否存在且可读
+   - 确认OSS存储空间是否充足
+   - 验证文件名是否包含特殊字符
+
+5. **预签名URL问题**
+   - 检查有效期设置是否合理（1-168小时）
+   - 确认系统时间与OSS服务器时间同步
+   - 验证URL生成后是否能正常访问
+
+6. **报告有效期配置问题**
+   - 检查通知通道中的「报告下载链接有效期(小时)」字段是否正确保存
+   - 验证前端表单提交时是否包含 `oss_expires_in_hours` 参数
+   - 确认后端更新通知通道时是否正确处理该字段
+   - 查看日志中的有效期信息：`grep "有效期" logs/flask-*.log`
 
 **日志查看**:
 ```bash

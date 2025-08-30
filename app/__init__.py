@@ -1272,6 +1272,8 @@ def create_app(config_object='config.Config'):
                 channel.oss_bucket_name = data['oss_bucket_name']
             if 'oss_folder_path' in data:
                 channel.oss_folder_path = data['oss_folder_path']
+            if 'oss_expires_in_hours' in data:
+                channel.oss_expires_in_hours = data['oss_expires_in_hours']
             
             channel.updated_at = datetime.now()
             db.session.commit()

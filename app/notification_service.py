@@ -36,7 +36,8 @@ class NotificationService:
                 oss_access_key_id=data.get('oss_access_key_id', ''),
                 oss_access_key_secret=data.get('oss_access_key_secret', ''),
                 oss_bucket_name=data.get('oss_bucket_name', ''),
-                oss_folder_path=data.get('oss_folder_path', '')
+                oss_folder_path=data.get('oss_folder_path', ''),
+                oss_expires_in_hours=data.get('oss_expires_in_hours', 24)
             )
             
             # 设置请求体模板
@@ -75,6 +76,22 @@ class NotificationService:
                 channel.timeout = data.get('timeout', self.default_timeout)
             if 'request_body' in data:
                 channel.set_request_body_template(data['request_body'])
+            
+            # 更新OSS配置字段
+            if 'oss_enabled' in data:
+                channel.oss_enabled = data.get('oss_enabled', False)
+            if 'oss_endpoint' in data:
+                channel.oss_endpoint = data.get('oss_endpoint', '')
+            if 'oss_access_key_id' in data:
+                channel.oss_access_key_id = data.get('oss_access_key_id', '')
+            if 'oss_access_key_secret' in data:
+                channel.oss_access_key_secret = data.get('oss_access_key_secret', '')
+            if 'oss_bucket_name' in data:
+                channel.oss_bucket_name = data.get('oss_bucket_name', '')
+            if 'oss_folder_path' in data:
+                channel.oss_folder_path = data.get('oss_folder_path', '')
+            if 'oss_expires_in_hours' in data:
+                channel.oss_expires_in_hours = data.get('oss_expires_in_hours', 24)
             
             from datetime import datetime
             channel.updated_at = datetime.now()
@@ -142,8 +159,6 @@ class NotificationService:
                         if not download_url:
                             download_url = '报告上传失败，请检查OSS配置'
                             logger.error(f"OSS上传失败 - 通道: {channel.name}")
-                        else:
-                            logger.info(f"OSS上传成功 - 通道: {channel.name}, URL: {download_url}")
                     else:
                         if not channel.oss_enabled:
                             logger.info(f"通道 {channel.name} 未启用OSS")
@@ -188,15 +203,24 @@ class NotificationService:
             remote_file_name = f"{name}_{timestamp}{ext}"
             
             # 上传文件并获取下载链接
+            expires_in_hours = channel.oss_expires_in_hours or 24  # 使用通道配置的有效期，默认24小时
             success, message, download_url = self.oss_service.upload_and_get_url(
                 local_file_path=report_file_path,
                 remote_file_name=remote_file_name,
-                expires_in_hours=24  # 链接有效期24小时
+                expires_in_hours=expires_in_hours
             )
             
             if success:
+                # 计算有效期到期时间
+                from datetime import datetime, timedelta
+                expire_time = datetime.now() + timedelta(hours=expires_in_hours)
+                expire_time_str = expire_time.strftime("%Y/%m/%d %H:%M:%S")
+                
+                # 在下载链接后添加有效期信息
+                url_with_expiry = f"{download_url}\n报告下载链接有效期至{expire_time_str}"
+                
                 logger.info(f"OSS上传成功 - 通道: {channel.name}, URL: {download_url}")
-                return download_url
+                return url_with_expiry
             else:
                 logger.error(f"OSS上传失败 - 通道: {channel.name}, 错误: {message}")
                 return None

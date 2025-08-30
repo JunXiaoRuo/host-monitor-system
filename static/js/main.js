@@ -4136,6 +4136,16 @@ function showAddNotificationModal() {
                                                placeholder="reports" value="reports">
                                         <div class="form-text">可选，默认为 reports，用于组织文件存储结构</div>
                                     </div>
+                                    <div class="mb-3">
+                                        <label for="ossExpiresInHours" class="form-label">报告下载链接有效期(小时)</label>
+                                        <input type="number" class="form-control" id="ossExpiresInHours" 
+                                               value="24" min="1" max="168">
+                                        <div class="form-text">设置OSS报告下载链接的有效期，范围1-168小时(1周)，默认24小时</div>
+                                    </div>
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        <strong>重要安全提示：</strong>为确保OSS配置安全有效，请务必阅读并按照 <a href="#" onclick="showOSSSecurityGuide()" class="alert-link">README中的OSS安全配置章节</a> 进行设置，包括Bucket权限、RAM用户权限等配置。
+                                    </div>
                                     <div class="alert alert-info">
                                         <i class="bi bi-info-circle"></i>
                                         启用OSS上传后，系统会自动将生成的巡检报告上传到阿里云OSS，并在通知中提供 #url# 变量用于获取下载链接。
@@ -4169,6 +4179,73 @@ function showAddNotificationModal() {
     modal.show();
 }
 
+// 显示OSS安全配置指南
+function showOSSSecurityGuide() {
+    const guideHtml = `
+        <div class="modal fade" id="ossSecurityGuideModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-shield-check"></i>
+                            OSS安全配置指南
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>安全警告：</strong>不正确的OSS配置可能导致报告文件被未授权访问！
+                        </div>
+                        
+                        <h6><i class="bi bi-1-circle"></i> Bucket权限设置</h6>
+                        <ul>
+                            <li>将Bucket读写权限设置为<strong>私有</strong></li>
+                            <li>禁用公共读取权限</li>
+                            <li>启用Bucket授权策略</li>
+                        </ul>
+                        
+                        <h6><i class="bi bi-2-circle"></i> RAM用户权限配置</h6>
+                        <ul>
+                            <li>创建专用RAM用户，不要使用主账户AccessKey</li>
+                            <li>为RAM用户分配最小必要权限</li>
+                            <li>定期轮换AccessKey</li>
+                        </ul>
+                        
+                        <h6><i class="bi bi-3-circle"></i> 安全验证</h6>
+                        <ul>
+                            <li>测试直接URL访问应返回403错误</li>
+                            <li>确保只能通过预签名URL访问文件</li>
+                            <li>验证链接有效期设置正确</li>
+                        </ul>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            详细配置步骤请参考项目README文档中的"OSS安全配置"章节。
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">我已了解</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 创建临时容器显示指南
+    const tempContainer = document.createElement('div');
+    tempContainer.innerHTML = guideHtml;
+    document.body.appendChild(tempContainer);
+    
+    const modal = new bootstrap.Modal(document.getElementById('ossSecurityGuideModal'));
+    modal.show();
+    
+    // 模态框关闭后清理DOM
+    document.getElementById('ossSecurityGuideModal').addEventListener('hidden.bs.modal', function() {
+        document.body.removeChild(tempContainer);
+    });
+}
+
 // 保存通知通道
 function saveNotificationChannel() {
     const channelId = document.getElementById('notificationId')?.value;
@@ -4188,7 +4265,8 @@ function saveNotificationChannel() {
         oss_access_key_id: document.getElementById('ossAccessKeyId').value.trim(),
         oss_access_key_secret: document.getElementById('ossAccessKeySecret').value.trim(),
         oss_bucket_name: document.getElementById('ossBucketName').value.trim(),
-        oss_folder_path: document.getElementById('ossFolderPath').value.trim()
+        oss_folder_path: document.getElementById('ossFolderPath').value.trim(),
+        oss_expires_in_hours: parseInt(document.getElementById('ossExpiresInHours').value) || 24
     };
     
     // 验证必填字段
@@ -4378,10 +4456,26 @@ function showEditNotificationModal(channelId) {
                                             </div>
                                         </div>
                                         
-                                        <div class="mb-3">
-                                            <label for="ossFolderPath" class="form-label">存储文件夹路径</label>
-                                            <input type="text" class="form-control" id="ossFolderPath" value="${channel.oss_folder_path || ''}" placeholder="reports/">
-                                            <div class="form-text">可选，报告在OSS中的存储路径，留空则存储在根目录</div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="ossFolderPath" class="form-label">存储文件夹路径</label>
+                                                    <input type="text" class="form-control" id="ossFolderPath" value="${channel.oss_folder_path || ''}" placeholder="reports/">
+                                                    <div class="form-text">可选，报告在OSS中的存储路径，留空则存储在根目录</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="ossExpiresInHours" class="form-label">报告下载链接有效期(小时)</label>
+                                                    <input type="number" class="form-control" id="ossExpiresInHours" value="${channel.oss_expires_in_hours || 24}" min="1" max="168" placeholder="24">
+                                                    <div class="form-text">下载链接的有效期，范围1-168小时，默认24小时</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert alert-warning" role="alert">
+                                            <i class="bi bi-exclamation-triangle"></i>
+                                            <strong>重要提示：</strong>为确保OSS配置正确工作，请仔细阅读 <a href="#" onclick="showOSSSecurityGuide(); return false;" class="alert-link">README中的OSS安全配置章节</a>，正确设置Bucket权限和RAM用户权限。
                                         </div>
                                     </div>
                                 </div>
