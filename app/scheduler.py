@@ -75,7 +75,7 @@ def execute_monitor_task_static(task_id: int, database_url: str, report_dir: str
             try:
                 from app.notification_service import NotificationService
                 notification_service = NotificationService()
-                notification_success, notification_message = notification_service.send_notification(monitor_result)
+                notification_success, notification_message = notification_service.send_notification(monitor_result, report_path)
                 logger.info(f"计划任务通知发送结果: {notification_message}")
             except Exception as notify_error:
                 logger.error(f"计划任务发送通知失败: {str(notify_error)}")
@@ -389,7 +389,7 @@ class SchedulerService:
             try:
                 from app.notification_service import NotificationService
                 notification_service = NotificationService()
-                notification_success, notification_message = notification_service.send_notification(monitor_result)
+                notification_success, notification_message = notification_service.send_notification(monitor_result, report_path)
                 logger.info(f"计划任务通知发送结果: {notification_message}")
             except Exception as notify_error:
                 logger.error(f"计划任务发送通知失败: {str(notify_error)}")
