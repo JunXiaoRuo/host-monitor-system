@@ -173,7 +173,7 @@ function renderOSSConfigModal(ossConfig) {
                                 <i class="bi bi-info-circle"></i>
                                 <strong>说明：</strong>
                                 <ul class="mb-0 mt-2">
-                                    <li>配置后，所有启用的通知通道都将使用此OSS配置</li>
+                                    <li>配置后，所有启用的通知通道都将使用此OSS配置，请求体中变量为#url#</li>
                                     <li>报告文件将自动上传到OSS，并在通知中提供下载链接</li>
                                     <li>请确保OSS配置正确，否则可能影响通知发送</li>
                                 </ul>
@@ -181,7 +181,7 @@ function renderOSSConfigModal(ossConfig) {
                             
                             <div class="alert alert-warning" role="alert">
                                 <i class="bi bi-exclamation-triangle"></i>
-                                <strong>重要提示：</strong>为确保OSS配置正确工作，请仔细阅读 <a href="#" onclick="showOSSSecurityGuide(); return false;" class="alert-link">README中的OSS安全配置章节</a>，正确设置Bucket权限和RAM用户权限。
+                                <strong>重要提示：</strong>为确保OSS配置正确工作，请仔细阅读项目根目录下 <a href="#" onclick="showOSSSecurityGuide(); return false;" class="alert-link">README中的OSS安全配置章节</a>，正确设置Bucket权限和RAM用户权限。
                             </div>
                         </form>
                     </div>
@@ -4505,16 +4505,16 @@ function showAddNotificationModal() {
                                 <label for="notificationRequestBody" class="form-label">请求体模板 (JSON格式)</label>
                                 <textarea class="form-control" id="notificationRequestBody" rows="4" 
                                           placeholder='{
-  "text": "#context#",
+  "text": "#context#\\n报告下载链接:#url#",
   "channel": "#general"
 }'></textarea>
-                                <div class="form-text">可选，用于自定义请求体格式，留空将使用默认格式。可使用 #url# 变量获取报告下载链接</div>
+                                <div class="form-text">必填，用于自定义请求体格式，根据通知服务器的要求进行配置。可使用 #context#和#url# 变量获取巡检内容及报告下载链接</div>
                             </div>
                             
                             <!-- OSS配置已移至全局配置 -->
                             <div class="alert alert-info" role="alert">
                                 <i class="bi bi-info-circle"></i>
-                                <strong>OSS配置说明：</strong>OSS配置已移至全局配置，请使用页面上方的 <strong>"OSS配置"</strong> 按钮进行统一管理。所有通知通道将共享同一个OSS配置。
+                                <strong>OSS配置说明：</strong>OSS配置已移至全局配置，请使用通知管理页面上方的 <strong>"OSS配置"</strong> 按钮进行统一管理。所有通知通道将共享同一个OSS配置。
                             </div>
                         </form>
                     </div>
