@@ -239,14 +239,7 @@ class NotificationChannel(db.Model):
     is_enabled = db.Column(db.Boolean, default=True, comment='是否启用')
     timeout = db.Column(db.Integer, default=30, comment='超时时间(秒)')
     
-    # OSS配置字段
-    oss_enabled = db.Column(db.Boolean, default=False, comment='是否启用OSS上传')
-    oss_endpoint = db.Column(db.String(200), comment='OSS Endpoint')
-    oss_access_key_id = db.Column(db.String(100), comment='OSS Access Key ID')
-    oss_access_key_secret = db.Column(db.String(100), comment='OSS Access Key Secret')
-    oss_bucket_name = db.Column(db.String(100), comment='OSS Bucket名称')
-    oss_folder_path = db.Column(db.String(200), comment='OSS存储文件夹路径')
-    oss_expires_in_hours = db.Column(db.Integer, default=24, comment='OSS报告下载链接有效期(小时)')
+    # OSS配置已移至全局配置表 oss_config
     
     created_at = db.Column(db.DateTime, default=get_local_time)
     updated_at = db.Column(db.DateTime, default=get_local_time, onupdate=get_local_time)
@@ -277,13 +270,7 @@ class NotificationChannel(db.Model):
             # content_template字段已移除
             'is_enabled': self.is_enabled,
             'timeout': self.timeout,
-            'oss_enabled': self.oss_enabled,
-            'oss_endpoint': self.oss_endpoint,
-            'oss_access_key_id': self.oss_access_key_id,
-            'oss_access_key_secret': self.oss_access_key_secret,
-            'oss_bucket_name': self.oss_bucket_name,
-            'oss_folder_path': self.oss_folder_path,
-            'oss_expires_in_hours': self.oss_expires_in_hours,
+            # OSS配置已移至全局配置表
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -352,6 +339,35 @@ class ServiceMonitorLog(db.Model):
             'process_count': self.process_count,
             'process_info': self.get_process_info(),
             'error_message': self.error_message
+        }
+
+class OSSConfig(db.Model):
+    """OSS全局配置表"""
+    __tablename__ = 'oss_config'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    is_enabled = db.Column(db.Boolean, default=False, comment='是否启用OSS上传')
+    endpoint = db.Column(db.String(200), comment='OSS Endpoint')
+    access_key_id = db.Column(db.String(100), comment='OSS Access Key ID')
+    access_key_secret = db.Column(db.String(100), comment='OSS Access Key Secret')
+    bucket_name = db.Column(db.String(100), comment='OSS Bucket名称')
+    folder_path = db.Column(db.String(200), comment='OSS存储文件夹路径')
+    expires_in_hours = db.Column(db.Integer, default=24, comment='OSS报告下载链接有效期(小时)')
+    created_at = db.Column(db.DateTime, default=get_local_time)
+    updated_at = db.Column(db.DateTime, default=get_local_time, onupdate=get_local_time)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'is_enabled': self.is_enabled,
+            'endpoint': self.endpoint,
+            'access_key_id': self.access_key_id,
+            'access_key_secret': self.access_key_secret,
+            'bucket_name': self.bucket_name,
+            'folder_path': self.folder_path,
+            'expires_in_hours': self.expires_in_hours,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 class GlobalSettings(db.Model):

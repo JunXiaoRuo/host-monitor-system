@@ -6,7 +6,7 @@
 import json
 import requests
 from datetime import datetime
-from app.models import db, NotificationChannel
+from app.models import db, NotificationChannel, OSSConfig
 import logging
 from app.oss_service import OSSService
 
@@ -29,15 +29,8 @@ class NotificationService:
                 method=data.get('method', 'POST'),
                 # content_template字段已移除，直接在请求体模板中使用变量
                 timeout=data.get('timeout', self.default_timeout),
-                is_enabled=data.get('is_enabled', True),
-                # OSS配置字段
-                oss_enabled=data.get('oss_enabled', False),
-                oss_endpoint=data.get('oss_endpoint', ''),
-                oss_access_key_id=data.get('oss_access_key_id', ''),
-                oss_access_key_secret=data.get('oss_access_key_secret', ''),
-                oss_bucket_name=data.get('oss_bucket_name', ''),
-                oss_folder_path=data.get('oss_folder_path', ''),
-                oss_expires_in_hours=data.get('oss_expires_in_hours', 24)
+                is_enabled=data.get('is_enabled', True)
+                # OSS配置已移至全局配置表 oss_config
             )
             
             # 设置请求体模板
@@ -77,21 +70,7 @@ class NotificationService:
             if 'request_body' in data:
                 channel.set_request_body_template(data['request_body'])
             
-            # 更新OSS配置字段
-            if 'oss_enabled' in data:
-                channel.oss_enabled = data.get('oss_enabled', False)
-            if 'oss_endpoint' in data:
-                channel.oss_endpoint = data.get('oss_endpoint', '')
-            if 'oss_access_key_id' in data:
-                channel.oss_access_key_id = data.get('oss_access_key_id', '')
-            if 'oss_access_key_secret' in data:
-                channel.oss_access_key_secret = data.get('oss_access_key_secret', '')
-            if 'oss_bucket_name' in data:
-                channel.oss_bucket_name = data.get('oss_bucket_name', '')
-            if 'oss_folder_path' in data:
-                channel.oss_folder_path = data.get('oss_folder_path', '')
-            if 'oss_expires_in_hours' in data:
-                channel.oss_expires_in_hours = data.get('oss_expires_in_hours', 24)
+            # OSS配置已移至全局配置表 oss_config
             
             from datetime import datetime
             channel.updated_at = datetime.now()
@@ -149,19 +128,22 @@ class NotificationService:
             success_count = 0
             for channel in channels:
                 try:
-                    # 处理OSS上传和URL变量
+                    # 处理OSS上传和URL变量（使用全局OSS配置）
                     download_url = None
-                    logger.info(f"通道 {channel.name}: OSS启用状态={channel.oss_enabled}, 报告文件路径={report_file_path}")
                     
-                    if channel.oss_enabled and report_file_path:
+                    # 获取全局OSS配置
+                    oss_config = OSSConfig.query.first()
+                    logger.info(f"通道 {channel.name}: 全局OSS启用状态={oss_config.is_enabled if oss_config else False}, 报告文件路径={report_file_path}")
+                    
+                    if oss_config and oss_config.is_enabled and report_file_path:
                         logger.info(f"开始上传报告到OSS - 通道: {channel.name}")
-                        download_url = self._upload_to_oss_and_get_url(channel, report_file_path)
+                        download_url = self._upload_to_oss_and_get_url(oss_config, report_file_path)
                         if not download_url:
                             download_url = '报告上传失败，请检查OSS配置'
                             logger.error(f"OSS上传失败 - 通道: {channel.name}")
                     else:
-                        if not channel.oss_enabled:
-                            logger.info(f"通道 {channel.name} 未启用OSS")
+                        if not oss_config or not oss_config.is_enabled:
+                            logger.info(f"通道 {channel.name} 全局OSS未启用")
                         if not report_file_path:
                             logger.info(f"通道 {channel.name} 没有报告文件路径")
                         download_url = '未配置OSS存储，无法提供下载链接'
@@ -180,18 +162,18 @@ class NotificationService:
             logger.error(f"发送通知失败: {str(e)}")
             return False, f"发送通知失败: {str(e)}"
     
-    def _upload_to_oss_and_get_url(self, channel, report_file_path):
-        """上传报告到OSS并获取下载链接"""
+    def _upload_to_oss_and_get_url(self, oss_config, report_file_path):
+        """上传报告到OSS并获取下载链接（使用全局OSS配置）"""
         try:
             # 配置OSS服务
             if not self.oss_service.configure(
-                endpoint=channel.oss_endpoint,
-                access_key_id=channel.oss_access_key_id,
-                access_key_secret=channel.oss_access_key_secret,
-                bucket_name=channel.oss_bucket_name,
-                folder_path=channel.oss_folder_path or "reports"
+                endpoint=oss_config.endpoint,
+                access_key_id=oss_config.access_key_id,
+                access_key_secret=oss_config.access_key_secret,
+                bucket_name=oss_config.bucket_name,
+                folder_path=oss_config.folder_path or "reports"
             ):
-                logger.error(f"OSS配置失败 - 通道: {channel.name}")
+                logger.error(f"OSS配置失败 - 全局配置")
                 return None
             
             # 生成远程文件名（包含时间戳）
@@ -203,7 +185,7 @@ class NotificationService:
             remote_file_name = f"{name}_{timestamp}{ext}"
             
             # 上传文件并获取下载链接
-            expires_in_hours = channel.oss_expires_in_hours or 24  # 使用通道配置的有效期，默认24小时
+            expires_in_hours = oss_config.expires_in_hours or 24  # 使用全局配置的有效期，默认24小时
             success, message, download_url = self.oss_service.upload_and_get_url(
                 local_file_path=report_file_path,
                 remote_file_name=remote_file_name,
@@ -219,14 +201,14 @@ class NotificationService:
                 # 在下载链接后添加有效期信息
                 url_with_expiry = f"{download_url}\n报告下载链接有效期至{expire_time_str}"
                 
-                logger.info(f"OSS上传成功 - 通道: {channel.name}, URL: {download_url}")
+                logger.info(f"OSS上传成功 - 全局配置, URL: {download_url}")
                 return url_with_expiry
             else:
-                logger.error(f"OSS上传失败 - 通道: {channel.name}, 错误: {message}")
+                logger.error(f"OSS上传失败 - 全局配置, 错误: {message}")
                 return None
                 
         except Exception as e:
-            logger.error(f"OSS上传异常 - 通道: {channel.name}, 错误: {str(e)}")
+            logger.error(f"OSS上传异常 - 全局配置, 错误: {str(e)}")
             return None
     
     def _simplify_error_message(self, error_msg):

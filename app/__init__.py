@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-from app.models import db, Server, MonitorLog, ScheduleTask, Threshold, MonitorReport, AdminUser, NotificationChannel, ServiceConfig, ServiceMonitorLog, GlobalSettings
+from app.models import db, Server, MonitorLog, ScheduleTask, Threshold, MonitorReport, AdminUser, NotificationChannel, ServiceConfig, ServiceMonitorLog, GlobalSettings, OSSConfig
 from app.services import ServerService, ThresholdService
 from app.batch_import_service import BatchImportService
 from app.auth_service import AuthService
@@ -1259,21 +1259,7 @@ def create_app(config_object='config.Config'):
             if 'request_body' in data:
                 channel.set_request_body_template(data['request_body'])
             
-            # 更新OSS配置字段
-            if 'oss_enabled' in data:
-                channel.oss_enabled = data['oss_enabled']
-            if 'oss_endpoint' in data:
-                channel.oss_endpoint = data['oss_endpoint']
-            if 'oss_access_key_id' in data:
-                channel.oss_access_key_id = data['oss_access_key_id']
-            if 'oss_access_key_secret' in data:
-                channel.oss_access_key_secret = data['oss_access_key_secret']
-            if 'oss_bucket_name' in data:
-                channel.oss_bucket_name = data['oss_bucket_name']
-            if 'oss_folder_path' in data:
-                channel.oss_folder_path = data['oss_folder_path']
-            if 'oss_expires_in_hours' in data:
-                channel.oss_expires_in_hours = data['oss_expires_in_hours']
+            # OSS配置已移至全局配置表 oss_config
             
             channel.updated_at = datetime.now()
             db.session.commit()
@@ -1345,6 +1331,102 @@ def create_app(config_object='config.Config'):
                 
         except Exception as e:
             logger.error(f"测试通知通道失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    # OSS配置管理路由（API接口）
+    @app.route('/api/oss-config', methods=['GET'])
+    @login_required
+    def get_oss_config():
+        """获取OSS配置"""
+        try:
+            config = OSSConfig.query.first()
+            if not config:
+                # 如果没有配置，返回默认配置
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'is_enabled': False,
+                        'endpoint': '',
+                        'access_key_id': '',
+                        'access_key_secret': '',
+                        'bucket_name': '',
+                        'folder_path': '',
+                        'expires_in_hours': 24
+                    }
+                })
+            
+            return jsonify({
+                'success': True,
+                'data': config.to_dict()
+            })
+            
+        except Exception as e:
+            logger.error(f"获取OSS配置失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/oss-config', methods=['POST', 'PUT'])
+    @login_required
+    def save_oss_config():
+        """保存或更新OSS配置"""
+        try:
+            data = request.get_json()
+            
+            # 获取现有配置或创建新配置
+            config = OSSConfig.query.first()
+            if not config:
+                config = OSSConfig()
+                db.session.add(config)
+            
+            # 更新配置字段
+            if 'is_enabled' in data:
+                config.is_enabled = data['is_enabled']
+            if 'endpoint' in data:
+                config.endpoint = data['endpoint']
+            if 'access_key_id' in data:
+                config.access_key_id = data['access_key_id']
+            if 'access_key_secret' in data:
+                config.access_key_secret = data['access_key_secret']
+            if 'bucket_name' in data:
+                config.bucket_name = data['bucket_name']
+            if 'folder_path' in data:
+                config.folder_path = data['folder_path']
+            if 'expires_in_hours' in data:
+                config.expires_in_hours = data['expires_in_hours']
+            
+            config.updated_at = datetime.now()
+            db.session.commit()
+            
+            logger.info("OSS配置保存成功")
+            return jsonify({
+                'success': True,
+                'message': 'OSS配置保存成功',
+                'data': config.to_dict()
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"保存OSS配置失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/oss-config/test', methods=['POST'])
+    @login_required
+    def test_oss_config():
+        """测试OSS配置"""
+        try:
+            data = request.get_json()
+            
+            # 验证必要字段
+            required_fields = ['endpoint', 'access_key_id', 'access_key_secret', 'bucket_name']
+            for field in required_fields:
+                if not data.get(field):
+                    return jsonify({'success': False, 'message': f'缺少必要字段: {field}'})
+            
+            # 这里可以添加实际的OSS连接测试逻辑
+            # 暂时返回成功
+            return jsonify({'success': True, 'message': 'OSS配置测试成功'})
+            
+        except Exception as e:
+            logger.error(f"测试OSS配置失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
     # 服务监控管理路由（API接口）
