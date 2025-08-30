@@ -1,10 +1,10 @@
 Flask==2.3.3
 Flask-SQLAlchemy==3.0.5
-paramiko==3.3.1
+paramiko==3.5.1
 APScheduler==3.10.4
 Jinja2==3.1.2
 Werkzeug==2.3.7
-cryptography>=41.0.5
+cryptography==45.0.6
 psutil==5.9.6
 requests==2.31.0
 python-dotenv==1.0.0
