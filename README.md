@@ -15,6 +15,7 @@
 - 📋 **详细监控报告**: 生成HTML格式监控报告，支持历史数据查询
 - 🔔 **多渠道通知**: 支持Webhook通知，可推送到企业微信、钉钉等
 - 📈 **完整历史记录**: 监控历史、执行日志、系统状态变化记录
+- 📝 **系统日志管理**: 实时查看系统运行日志，支持多种日志文件切换和自动刷新
 - 🔐 **安全认证机制**: 管理员登录认证，密码加密存储，会话管理
 - 🎯 **响应式界面**: Bootstrap构建的现代化响应式Web界面
 - 🚀 **高并发处理**: 多线程并发监控，提高监控效率
@@ -311,7 +312,7 @@ python reset_password.py admin newpassword123
 ### 文件功能说明
 
 **核心模块 (app/)**:
-- **`__init__.py`**: Flask应用工厂，包含所有路由定义和API接口
+- **`__init__.py`**: Flask应用工厂，包含所有路由定义和API接口（含系统日志API）
 - **`models.py`**: 数据库模型定义，包含10个核心数据表
 - **`monitor.py`**: 主机监控核心功能，CPU/内存/磁盘监控
 - **`service_monitor.py`**: 服务进程监控功能，支持自定义进程名监控
@@ -324,10 +325,10 @@ python reset_password.py admin newpassword123
 - **`batch_import_service.py`**: 批量导入服务，支持服务器和服务配置批量导入
 
 **前端文件**:
-- **`templates/index.html`**: 主页面模板，包含所有功能面板（含服务配置）
+- **`templates/index.html`**: 主页面模板，包含所有功能面板（含服务配置和系统日志）
 - **`templates/login.html`**: 用户登录页面
 - **`templates/setup.html`**: 系统初始化设置页面
-- **`static/js/main.js`**: 前端主JavaScript逻辑
+- **`static/js/main.js`**: 前端主JavaScript逻辑（含系统日志管理功能）
 
 **配置文件**:
 - **`config.py`**: 应用主配置，支持从环境变量读取配置
@@ -349,7 +350,7 @@ python reset_password.py admin newpassword123
 
 **系统文件**:
 - **`instance/host_monitor.db`**: SQLite数据库，存储所有系统数据
-- **`logs/`**: 系统日志目录，按天分割存储，支持错误日志分离
+- **`logs/`**: 系统日志目录，按天分割存储，支持错误日志分离和Web界面实时查看
 - **`reports/`**: 监控报告存储目录，支持手动和自动报告生成
 
 ### 配置文件
@@ -626,6 +627,14 @@ LOG_RETENTION_DAYS=30             # 日志保留天数
 CONSOLE_LOG_ENABLED=True          # 控制台日志开关
 CONSOLE_LOG_LEVEL=INFO            # 控制台日志级别
 ```
+
+#### 系统日志页面功能
+
+**Web界面日志查看**:
+- 🔄 **自动刷新**: 支持1秒间隔的实时日志刷新，可随时开启/关闭
+- 📂 **多文件切换**: 支持查看不同类型的日志文件（运行日志、错误日志等）
+- 🔍 **实时监控**: 页面切换后自动保持刷新状态，无需重新设置
+- 📱 **响应式设计**: 适配不同屏幕尺寸的设备
 
 #### 查看日志
 

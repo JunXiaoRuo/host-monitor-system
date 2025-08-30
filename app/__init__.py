@@ -1565,6 +1565,69 @@ def create_app(config_object='config.Config'):
             logger.error(f"停止服务监控循环失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
+    # 系统日志API
+    @app.route('/api/logs/<log_file>', methods=['GET'])
+    @login_required
+    def get_log_content(log_file):
+        """获取指定日志文件的内容"""
+        try:
+            # 定义允许访问的日志文件
+            allowed_logs = {
+                'flask.log': 'flask.log',
+                'run.log': 'run.log', 
+                'production.log': 'production.log',
+                'run-error.log': 'run-error.log',
+                'flask-error.log': 'flask-error.log',
+                'production-error.log': 'production-error.log'
+            }
+            
+            if log_file not in allowed_logs:
+                return jsonify({'success': False, 'message': '不允许访问的日志文件'})
+            
+            # 构建日志文件路径
+            log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+            log_path = os.path.join(log_dir, allowed_logs[log_file])
+            
+            # 检查文件是否存在
+            if not os.path.exists(log_path):
+                return jsonify({
+                    'success': True,
+                    'content': '',
+                    'message': '日志文件不存在或尚未生成',
+                    'last_modified': None
+                })
+            
+            # 获取文件修改时间
+            last_modified = os.path.getmtime(log_path)
+            last_modified_str = datetime.fromtimestamp(last_modified).strftime('%Y-%m-%d %H:%M:%S')
+            
+            # 读取文件内容（最后1000行）
+            lines = []
+            try:
+                with open(log_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+            except UnicodeDecodeError:
+                # 如果UTF-8解码失败，尝试使用GBK
+                with open(log_path, 'r', encoding='gbk') as f:
+                    lines = f.readlines()
+            
+            # 只返回最后1000行
+            if len(lines) > 1000:
+                lines = lines[-1000:]
+            
+            content = ''.join(lines)
+            
+            return jsonify({
+                'success': True,
+                'content': content,
+                'last_modified': last_modified_str,
+                'total_lines': len(lines)
+            })
+            
+        except Exception as e:
+            logger.error(f"读取日志文件失败: {str(e)}")
+            return jsonify({'success': False, 'message': f'读取日志文件失败: {str(e)}'})
+    
     # 注册应用关闭时的清理函数
     import atexit
     

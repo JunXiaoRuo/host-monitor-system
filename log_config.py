@@ -15,6 +15,19 @@ from datetime import datetime
 from typing import Optional
 
 
+class LogsAPIFilter(logging.Filter):
+    """过滤掉日志API相关的请求记录"""
+    
+    def filter(self, record):
+        """过滤日志记录"""
+        # 如果日志消息包含 '/api/logs/' 路径，则过滤掉
+        if hasattr(record, 'getMessage'):
+            message = record.getMessage()
+            if '/api/logs/' in message:
+                return False
+        return True
+
+
 class DailyRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
     """自定义按天轮转的日志处理器"""
     
@@ -186,6 +199,10 @@ def setup_flask_app_logging(app, app_name: str = 'flask', console_output: bool =
     
     # 配置werkzeug日志（Flask开发服务器）
     werkzeug_logger = logging.getLogger('werkzeug')
+    # 添加过滤器，过滤掉日志API相关的请求
+    logs_api_filter = LogsAPIFilter()
+    werkzeug_logger.addFilter(logs_api_filter)
+    
     if not console_output:
         # 如果不需要控制台输出，将werkzeug日志级别设置为WARNING，减少输出
         werkzeug_logger.setLevel(logging.WARNING)

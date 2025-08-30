@@ -70,6 +70,12 @@ function updateCurrentTime() {
 
 // 显示指定的页面部分
 function showSection(sectionName) {
+    // 离开系统日志页面时停止自动刷新，但保持状态
+    if (currentSection === 'systemlogs' && sectionName !== 'systemlogs') {
+        stopAutoRefresh();
+        // 不重置autoRefreshEnabled，保持用户的选择状态
+    }
+    
     document.querySelectorAll('.section').forEach(section => {
         section.style.display = 'none';
     });
@@ -92,6 +98,7 @@ function showSection(sectionName) {
         case 'reports': loadReports(1, {}); break; // 使用新的分页API
         case 'logs': loadLogs(1, {}); break; // 使用新的分页API
         case 'notifications': loadNotifications(); break; // 加载通知通道
+        case 'systemlogs': initSystemLogs(); break; // 初始化系统日志页面
     }
 }
 
@@ -2715,6 +2722,196 @@ function bulkDeleteLogs() {
             deleteBtn.innerHTML = originalText;
             deleteBtn.disabled = false;
         });
+    }
+}
+
+// ========== 系统日志页面缺失的函数 ==========
+
+// 刷新系统日志
+function refreshSystemLogs() {
+    loadLogContent();
+}
+
+// 切换自动刷新
+function toggleAutoRefresh() {
+    const autoRefreshText = document.getElementById('autoRefreshText');
+    const autoRefreshIcon = document.getElementById('autoRefreshIcon');
+    
+    if (autoRefreshEnabled) {
+        stopAutoRefresh();
+        autoRefreshEnabled = false;
+        if (autoRefreshText) autoRefreshText.textContent = '开启自动刷新';
+        if (autoRefreshIcon) {
+            autoRefreshIcon.parentElement.classList.remove('btn-warning');
+            autoRefreshIcon.parentElement.classList.add('btn-outline-secondary');
+        }
+    } else {
+        startAutoRefresh();
+        autoRefreshEnabled = true;
+        if (autoRefreshText) autoRefreshText.textContent = '关闭自动刷新';
+        if (autoRefreshIcon) {
+            autoRefreshIcon.parentElement.classList.remove('btn-outline-secondary');
+            autoRefreshIcon.parentElement.classList.add('btn-warning');
+        }
+    }
+}
+
+// 系统日志相关功能
+let currentLogFile = 'flask.log';
+let logRefreshInterval = null;
+let autoRefreshEnabled = false;
+let lastLogModified = null;
+
+// 初始化系统日志页面
+function initSystemLogs() {
+    if (currentSection !== 'systemlogs') return;
+    
+    // 默认选择第一个日志文件
+    const firstRadio = document.querySelector('input[name="logFile"][value="flask.log"]');
+    if (firstRadio) {
+        firstRadio.checked = true;
+        currentLogFile = 'flask.log';
+    }
+    
+    // 恢复自动刷新按钮状态
+    const autoRefreshText = document.getElementById('autoRefreshText');
+    const autoRefreshIcon = document.getElementById('autoRefreshIcon');
+    if (autoRefreshText && autoRefreshIcon) {
+        if (autoRefreshEnabled) {
+            autoRefreshText.textContent = '关闭自动刷新';
+            autoRefreshIcon.parentElement.classList.remove('btn-outline-secondary');
+            autoRefreshIcon.parentElement.classList.add('btn-warning');
+            startAutoRefresh();
+        } else {
+            autoRefreshText.textContent = '开启自动刷新';
+            autoRefreshIcon.parentElement.classList.remove('btn-warning');
+            autoRefreshIcon.parentElement.classList.add('btn-outline-secondary');
+        }
+    }
+    
+    // 绑定事件
+    bindSystemLogsEvents();
+    
+    // 加载日志内容
+    loadLogContent();
+}
+
+// 绑定系统日志事件
+function bindSystemLogsEvents() {
+    // 日志文件切换事件
+    document.querySelectorAll('input[name="logFile"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.checked) {
+                // 将简化名称转换为完整文件名
+                const logFileMap = {
+                    'flask': 'flask.log',
+                    'run': 'run.log',
+                    'production': 'production.log',
+                    'run-error': 'run-error.log',
+                    'flask-error': 'flask-error.log',
+                    'production-error': 'production-error.log'
+                };
+                currentLogFile = logFileMap[this.value] || this.value;
+                
+                // 更新显示的文件名
+                const fileNameElement = document.getElementById('currentLogFileName');
+                if (fileNameElement) {
+                    fileNameElement.textContent = currentLogFile;
+                }
+                
+                loadLogContent();
+            }
+        });
+    });
+    
+    // 刷新按钮事件
+    const refreshBtn = document.getElementById('refreshLogBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', loadLogContent);
+    }
+    
+    // 自动刷新切换事件
+    const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+    if (autoRefreshToggle) {
+        autoRefreshToggle.addEventListener('change', function() {
+            autoRefreshEnabled = this.checked;
+            if (autoRefreshEnabled) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+    }
+}
+
+// 加载日志内容
+function loadLogContent() {
+    if (currentSection !== 'systemlogs') return;
+    
+    const loadingElement = document.getElementById('logLoading');
+    const contentElement = document.getElementById('logContent');
+    const lastUpdateElement = document.getElementById('logLastUpdate');
+    
+    // 显示加载状态
+    if (loadingElement) loadingElement.style.display = 'block';
+    
+    safeFetch(`/api/logs/${currentLogFile}`)
+        .then(response => response.json())
+        .then(data => {
+            if (loadingElement) loadingElement.style.display = 'none';
+            
+            if (data.success) {
+                // 更新日志内容
+                if (contentElement) {
+                    contentElement.textContent = data.content || '日志文件为空或尚未生成';
+                    // 滚动到底部显示最新日志
+                    contentElement.scrollTop = contentElement.scrollHeight;
+                }
+                
+                // 更新最后修改时间
+                if (lastUpdateElement && data.last_modified) {
+                    lastUpdateElement.textContent = `最后更新: ${data.last_modified}`;
+                    lastLogModified = data.last_modified;
+                } else if (lastUpdateElement) {
+                    lastUpdateElement.textContent = '最后更新: 未知';
+                }
+            } else {
+                if (contentElement) {
+                    contentElement.textContent = `加载失败: ${data.message}`;
+                }
+                showAlert(`加载日志失败: ${data.message}`, 'danger');
+            }
+        })
+        .catch(error => {
+            if (loadingElement) loadingElement.style.display = 'none';
+            if (contentElement) {
+                contentElement.textContent = '加载日志时发生错误';
+            }
+            if (error.message !== 'Unauthorized') {
+                showAlert('加载日志失败', 'danger');
+            }
+        });
+}
+
+// 开始自动刷新
+function startAutoRefresh() {
+    if (logRefreshInterval) {
+        clearInterval(logRefreshInterval);
+    }
+    
+    // 每1秒刷新一次
+    logRefreshInterval = setInterval(() => {
+        if (currentSection === 'systemlogs' && autoRefreshEnabled) {
+            loadLogContent();
+        }
+    }, 1000);
+}
+
+// 停止自动刷新
+function stopAutoRefresh() {
+    if (logRefreshInterval) {
+        clearInterval(logRefreshInterval);
+        logRefreshInterval = null;
     }
 }
 

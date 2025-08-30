@@ -186,6 +186,12 @@
                                 通知管理
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#systemlogs" onclick="showSection('systemlogs')">
+                                <i class="bi bi-file-earmark-text"></i>
+                                系统日志
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
@@ -693,6 +699,83 @@
                                         </tr>
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统日志 -->
+                <div id="systemlogs" class="section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2><i class="bi bi-file-earmark-text"></i> 系统日志</h2>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="refreshSystemLogs()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                刷新
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="toggleAutoRefresh()">
+                                <i class="bi bi-arrow-repeat" id="autoRefreshIcon"></i>
+                                <span id="autoRefreshText">开启自动刷新</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" role="alert">
+                        <i class="bi bi-info-circle"></i>
+                        如需查看历史日志请前往项目目录下logs文件夹查看
+                    </div>
+
+                    <div class="card dashboard-card mb-4">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <label class="form-label">选择日志文件：</label>
+                                    <div class="btn-group" role="group" id="logFileButtons">
+                                        <input type="radio" class="btn-check" name="logFile" id="flask-log" value="flask" checked>
+                                        <label class="btn btn-outline-primary" for="flask-log">应用日志 (flask.log)</label>
+                                        
+                                        <input type="radio" class="btn-check" name="logFile" id="run-log" value="run">
+                                        <label class="btn btn-outline-primary" for="run-log">开发日志 (run.log)</label>
+                                        
+                                        <input type="radio" class="btn-check" name="logFile" id="production-log" value="production">
+                                        <label class="btn btn-outline-primary" for="production-log">生产日志 (production.log)</label>
+                                        
+                                        <input type="radio" class="btn-check" name="logFile" id="run-error-log" value="run-error">
+                                        <label class="btn btn-outline-danger" for="run-error-log">开发错误 (run-error.log)</label>
+                                        
+                                        <input type="radio" class="btn-check" name="logFile" id="flask-error-log" value="flask-error">
+                                        <label class="btn btn-outline-danger" for="flask-error-log">应用错误 (flask-error.log)</label>
+                                        
+                                        <input type="radio" class="btn-check" name="logFile" id="production-error-log" value="production-error">
+                                        <label class="btn btn-outline-danger" for="production-error-log">生产错误 (production-error.log)</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card dashboard-card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="bi bi-file-text"></i>
+                                日志内容 - <span id="currentLogFileName">flask.log</span>
+                            </h5>
+                            <div class="text-muted small">
+                                 <span id="logLastUpdate">-</span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div id="logLoadingIndicator" class="text-center p-4" style="display: none;">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <div class="mt-2">加载日志中...</div>
+                            </div>
+                            <div id="logContent" class="p-3" style="background-color: #f8f9fa; font-family: 'Courier New', monospace; font-size: 0.875rem; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">
+                                <div class="text-center text-muted">
+                                    <i class="bi bi-file-earmark-text"></i>
+                                    <div>选择日志文件开始查看</div>
+                                </div>
                             </div>
                         </div>
                     </div>
