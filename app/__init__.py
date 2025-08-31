@@ -1250,8 +1250,7 @@ def create_app(config_object='config.Config'):
                 channel.webhook_url = data['webhook_url']
             if 'method' in data:
                 channel.method = data['method']
-            if 'content_template' in data:
-                channel.content_template = data['content_template']
+            # content_template字段已移除，直接在请求体模板中使用变量
             if 'is_enabled' in data:
                 channel.is_enabled = data['is_enabled']
             if 'timeout' in data:
@@ -1686,12 +1685,18 @@ def create_app(config_object='config.Config'):
             # 读取文件内容（最后1000行）
             lines = []
             try:
-                with open(log_path, 'r', encoding='utf-8') as f:
+                # 首先尝试UTF-8编码，使用errors='replace'处理无法解码的字节
+                with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
                     lines = f.readlines()
-            except UnicodeDecodeError:
-                # 如果UTF-8解码失败，尝试使用GBK
-                with open(log_path, 'r', encoding='gbk') as f:
-                    lines = f.readlines()
+            except Exception:
+                try:
+                    # 如果仍然失败，尝试使用GBK编码
+                    with open(log_path, 'r', encoding='gbk', errors='replace') as f:
+                        lines = f.readlines()
+                except Exception:
+                    # 最后尝试使用latin-1编码（几乎不会失败）
+                    with open(log_path, 'r', encoding='latin-1', errors='replace') as f:
+                        lines = f.readlines()
             
             # 只返回最后1000行
             if len(lines) > 1000:

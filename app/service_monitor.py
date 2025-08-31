@@ -682,10 +682,8 @@ class ServiceMonitorService:
             success_count = 0
             for channel in channels:
                 try:
-                    # 替换内容变量
+                    # 使用原始内容，变量替换在请求体模板中处理
                     final_content = content
-                    if channel.content_template:
-                        final_content = channel.content_template.replace('#context#', content)
                     
                     if channel.method.upper() == 'GET':
                         # GET请求
@@ -712,9 +710,16 @@ class ServiceMonitorService:
                                 )
                             except json.JSONDecodeError:
                                 # 如果不是有效JSON，直接作为文本发送
+                                request_body = channel.request_body.replace('#context#', final_content)
+                                request_body = request_body.replace('#url#', '')  # 服务监控通知中移除报告下载链接
+                                # 移除固定的"报告下载链接："文本
+                                request_body = request_body.replace('报告下载链接：', '')
+                                request_body = request_body.replace('报告下载链接:', '')
+                                # 清理多余的换行符
+                                request_body = request_body.replace('\n\n', '\n').strip()
                                 response = requests.post(
                                     channel.webhook_url,
-                                    data=channel.request_body.replace('#context#', final_content),
+                                    data=request_body,
                                     timeout=channel.timeout
                                 )
                         else:
@@ -752,7 +757,15 @@ class ServiceMonitorService:
         elif isinstance(data, list):
             return [self._replace_variables_in_dict(item, content) for item in data]
         elif isinstance(data, str):
-            return data.replace('#context#', content)
+            # 替换内容变量，移除报告下载链接占位符（服务监控不需要报告链接）
+            result = data.replace('#context#', content)
+            result = result.replace('#url#', '')  # 服务监控通知中移除报告下载链接
+            # 移除固定的"报告下载链接："文本
+            result = result.replace('报告下载链接：', '')
+            result = result.replace('报告下载链接:', '')
+            # 清理多余的换行符
+            result = result.replace('\n\n', '\n').strip()
+            return result
         else:
             return data
     
