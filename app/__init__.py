@@ -325,11 +325,21 @@ def create_app(config_object='config.Config'):
                         elif latest_log.status in ['stopped', 'error']:
                             error_count += 1
                 
+                # 获取服务器最后监控时间（主机巡检）
+                latest_monitor_log = MonitorLog.query.filter_by(
+                    server_id=server_id
+                ).order_by(MonitorLog.monitor_time.desc()).first()
+                
+                last_monitor_time = None
+                if latest_monitor_log:
+                    last_monitor_time = latest_monitor_log.monitor_time.isoformat()
+                
                 server.update({
                     'total_services': total_services,
                     'monitoring_services': monitoring_services,
                     'normal_services': normal_count,
-                    'error_services': error_count
+                    'error_services': error_count,
+                    'last_monitor_time': last_monitor_time
                 })
             
             return jsonify({

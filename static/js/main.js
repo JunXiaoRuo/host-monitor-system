@@ -601,7 +601,7 @@ function renderServersTable(servers) {
                     <span class="badge bg-${statusClass}">${statusText}</span>
                 </td>
                 <td>${serviceCountDisplay}</td>
-                <td>${server.updated_at ? new Date(server.updated_at).toLocaleString('zh-CN') : '-'}</td>
+                <td>${server.last_monitor_time ? new Date(server.last_monitor_time).toLocaleString('zh-CN') : '未监控'}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-success me-1" onclick="monitorSingleServerFromTable(${server.id}, '${server.name}')" title="监控该服务器">
                         <i class="bi bi-play-circle"></i>
