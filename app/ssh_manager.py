@@ -17,7 +17,7 @@ class SSHConnectionManager:
     def test_connection(self, host: str, port: int, username: str, 
                        password: Optional[str] = None, private_key_path: Optional[str] = None) -> Tuple[bool, str]:
         """
-        测试SSH连接
+        测试SSH连接，支持重试机制
         
         Args:
             host: 主机地址
@@ -29,64 +29,84 @@ class SSHConnectionManager:
         Returns:
             (is_success, message)
         """
-        try:
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            # 准备认证参数
-            auth_kwargs = {
-                'hostname': host,
-                'port': port,
-                'username': username,
-                'timeout': self.connect_timeout
-            }
-            
-            if private_key_path:
-                try:
-                    private_key = paramiko.RSAKey.from_private_key_file(private_key_path)
-                    auth_kwargs['pkey'] = private_key
-                except Exception as e:
-                    try:
-                        private_key = paramiko.Ed25519Key.from_private_key_file(private_key_path)
-                        auth_kwargs['pkey'] = private_key
-                    except Exception:
-                        return False, f"无法加载私钥文件: {str(e)}"
-            elif password:
-                auth_kwargs['password'] = password
-            else:
-                return False, "必须提供密码或私钥文件"
-            
-            # 尝试连接
-            client.connect(**auth_kwargs)
-            
-            # 执行简单命令测试
-            stdin, stdout, stderr = client.exec_command('echo "connection test"', timeout=5)
-            result = stdout.read().decode().strip()
-            
-            client.close()
-            
-            if result == "connection test":
-                return True, "连接成功"
-            else:
-                return False, "连接测试失败"
+        max_retries = 1  # 最多重试1次
+        retry_delay = 3  # 重试间隔3秒
+        
+        for attempt in range(max_retries + 1):
+            try:
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 
-        except paramiko.AuthenticationException:
-            return False, "认证失败，请检查用户名和密码/私钥"
-        except paramiko.SSHException as e:
-            return False, f"SSH连接错误: {str(e)}"
-        except socket.timeout:
-            return False, "连接超时，请检查网络和主机地址"
-        except socket.error as e:
-            return False, f"网络连接错误: {str(e)}"
-        except Exception as e:
-            logger.error(f"SSH连接测试异常: {str(e)}")
-            return False, f"连接失败: {str(e)}"
+                # 准备认证参数
+                auth_kwargs = {
+                    'hostname': host,
+                    'port': port,
+                    'username': username,
+                    'timeout': self.connect_timeout
+                }
+                
+                if private_key_path:
+                    try:
+                        private_key = paramiko.RSAKey.from_private_key_file(private_key_path)
+                        auth_kwargs['pkey'] = private_key
+                    except Exception as e:
+                        try:
+                            private_key = paramiko.Ed25519Key.from_private_key_file(private_key_path)
+                            auth_kwargs['pkey'] = private_key
+                        except Exception:
+                            return False, f"无法加载私钥文件: {str(e)}"
+                elif password:
+                    auth_kwargs['password'] = password
+                else:
+                    return False, "必须提供密码或私钥文件"
+                
+                # 尝试连接
+                client.connect(**auth_kwargs)
+                
+                # 执行简单命令测试
+                stdin, stdout, stderr = client.exec_command('echo "connection test"', timeout=5)
+                result = stdout.read().decode().strip()
+                
+                client.close()
+                
+                if result == "connection test":
+                    return True, "连接成功"
+                else:
+                    return False, "连接测试失败"
+                    
+            except Exception as e:
+                error_str = str(e)
+                is_retryable_error = (
+                    "远程主机强迫关闭了一个现有的连接" in error_str or
+                    "10054" in error_str or
+                    "Connection reset by peer" in error_str or
+                    "Broken pipe" in error_str or
+                    isinstance(e, socket.error)
+                )
+                
+                if attempt < max_retries and is_retryable_error:
+                    logger.warning(f"SSH连接测试失败 - {host}:{port} (尝试 {attempt + 1}/{max_retries + 1}): {error_str}，{retry_delay}秒后重试...")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"SSH连接测试失败 - {host}:{port} (尝试 {attempt + 1}/{max_retries + 1}): {error_str}")
+                    
+                    if isinstance(e, paramiko.AuthenticationException):
+                        return False, "认证失败，请检查用户名和密码/私钥"
+                    elif isinstance(e, paramiko.SSHException):
+                        return False, f"SSH连接错误: {str(e)}"
+                    elif isinstance(e, socket.timeout):
+                        return False, "连接超时，请检查网络和主机地址"
+                    elif isinstance(e, socket.error):
+                        return False, f"网络连接错误: {str(e)}"
+                    else:
+                        return False, f"连接失败: {str(e)}"
     
     @contextmanager
     def get_connection(self, host: str, port: int, username: str,
                       password: Optional[str] = None, private_key_path: Optional[str] = None):
         """
-        获取SSH连接的上下文管理器
+        获取SSH连接的上下文管理器，支持重试机制
         
         Args:
             host: 主机地址
@@ -99,53 +119,78 @@ class SSHConnectionManager:
             paramiko.SSHClient: SSH客户端连接
         """
         client = None
-        try:
-            client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            # 准备认证参数
-            auth_kwargs = {
-                'hostname': host,
-                'port': port,
-                'username': username,
-                'timeout': self.connect_timeout
-            }
-            
-            if private_key_path:
-                try:
-                    private_key = paramiko.RSAKey.from_private_key_file(private_key_path)
-                    auth_kwargs['pkey'] = private_key
-                except Exception:
+        max_retries = 1  # 最多重试1次
+        retry_delay = 3  # 重试间隔3秒
+        
+        for attempt in range(max_retries + 1):
+            try:
+                client = paramiko.SSHClient()
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                
+                # 准备认证参数
+                auth_kwargs = {
+                    'hostname': host,
+                    'port': port,
+                    'username': username,
+                    'timeout': self.connect_timeout
+                }
+                
+                if private_key_path:
                     try:
-                        private_key = paramiko.Ed25519Key.from_private_key_file(private_key_path)
+                        private_key = paramiko.RSAKey.from_private_key_file(private_key_path)
                         auth_kwargs['pkey'] = private_key
-                    except Exception as e:
-                        raise Exception(f"无法加载私钥文件: {str(e)}")
-            elif password:
-                auth_kwargs['password'] = password
-            else:
-                raise Exception("必须提供密码或私钥文件")
-            
-            client.connect(**auth_kwargs)
-            yield client
-            
-        except Exception as e:
-            logger.error(f"SSH连接失败 - {host}:{port}: {str(e)}")
-            
-            # 提供更详细的错误信息
-            if isinstance(e, paramiko.AuthenticationException):
-                raise Exception("认证失败，请检查用户名和密码/私钥")
-            elif isinstance(e, paramiko.SSHException):
-                raise Exception(f"SSH连接错误: {str(e)}")
-            elif isinstance(e, socket.timeout):
-                raise Exception("连接超时，请检查网络和主机地址")
-            elif isinstance(e, socket.error):
-                raise Exception(f"网络连接错误: {str(e)}")
-            else:
-                raise Exception(f"连接失败: {str(e)}")
-        finally:
-            if client:
-                client.close()
+                    except Exception:
+                        try:
+                            private_key = paramiko.Ed25519Key.from_private_key_file(private_key_path)
+                            auth_kwargs['pkey'] = private_key
+                        except Exception as e:
+                            raise Exception(f"无法加载私钥文件: {str(e)}")
+                elif password:
+                    auth_kwargs['password'] = password
+                else:
+                    raise Exception("必须提供密码或私钥文件")
+                
+                client.connect(**auth_kwargs)
+                yield client
+                return  # 连接成功，退出重试循环
+                
+            except Exception as e:
+                error_str = str(e)
+                is_retryable_error = (
+                    "远程主机强迫关闭了一个现有的连接" in error_str or
+                    "10054" in error_str or
+                    "Connection reset by peer" in error_str or
+                    "Broken pipe" in error_str or
+                    isinstance(e, socket.error)
+                )
+                
+                if attempt < max_retries and is_retryable_error:
+                    logger.warning(f"SSH连接失败 - {host}:{port} (尝试 {attempt + 1}/{max_retries + 1}): {error_str}，{retry_delay}秒后重试...")
+                    if client:
+                        try:
+                            client.close()
+                        except:
+                            pass
+                        client = None
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"SSH连接失败 - {host}:{port} (尝试 {attempt + 1}/{max_retries + 1}): {error_str}")
+                    
+                    # 提供更详细的错误信息
+                    if isinstance(e, paramiko.AuthenticationException):
+                        raise Exception("认证失败，请检查用户名和密码/私钥")
+                    elif isinstance(e, paramiko.SSHException):
+                        raise Exception(f"SSH连接错误: {str(e)}")
+                    elif isinstance(e, socket.timeout):
+                        raise Exception("连接超时，请检查网络和主机地址")
+                    elif isinstance(e, socket.error):
+                        raise Exception(f"网络连接错误: {str(e)}")
+                    else:
+                        raise Exception(f"连接失败: {str(e)}")
+            finally:
+                if client and attempt == max_retries:
+                    client.close()
     
     def execute_command(self, client: paramiko.SSHClient, command: str, timeout: Optional[int] = None) -> Dict[str, Any]:
         """
