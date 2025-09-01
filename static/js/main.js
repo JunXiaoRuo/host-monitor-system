@@ -885,16 +885,18 @@ function showServerServicesModal(serverId, serverName) {
                     </div>
                     <div class="modal-body">
                         <!-- 提示信息 -->
-                        <div class="alert alert-info d-flex align-items-center mb-3" role="alert">
+                        <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
                             <i class="bi bi-info-circle-fill me-3"></i>
                             <div>
-                                <strong>提示：</strong>更多配置管理，请使用左侧菜单中的 
+                                <strong>提示：</strong>更多进程服务监控配置请前往左侧菜单
                                 <strong class="text-primary">
-                                    <i class="bi bi-gear"></i> 服务配置
+                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="showSection('services')">
+                                        <i class="bi bi-gear"></i> 服务配置
+                                    </button>
                                 </strong> 功能
                             </div>
                         </div>
-                        
+                       
                         <!-- 控制按钮区域 -->
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <div>
@@ -3821,10 +3823,17 @@ function renderServices() {
                             <span class="badge bg-danger me-2">异常：${server.error_services}</span>
                         </div>
                         <div class="col-md-1 text-end">
-                            <button class="btn btn-sm btn-outline-primary me-2" onclick="event.stopPropagation(); addService(${server.id})">
-                                <i class="bi bi-plus"></i>
-                            </button>
-                            <i class="bi ${expandIcon}"></i>
+                            <div class="d-flex align-items-center justify-content-end">
+                                <button class="btn btn-sm btn-outline-success me-2" onclick="event.stopPropagation(); monitorServerFromServices(${server.id}, '${server.name}')" title="立即监控该服务器">
+                                    <i class="bi bi-play-circle"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary me-2" onclick="event.stopPropagation(); addService(${server.id})" title="添加服务">
+                                    <i class="bi bi-plus"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); toggleServerExpansion(${server.id})" title="展开/收起">
+                                    <i class="bi ${expandIcon}"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3878,6 +3887,9 @@ function renderServicesList(server) {
                     </div>
                 </div>
                 <div>
+                    <button class="btn btn-sm btn-outline-success me-2" onclick="monitorSingleService(${service.id})" title="立即监控该服务">
+                        <i class="bi bi-play-circle"></i> 监控
+                    </button>
                     <button class="btn btn-sm btn-outline-primary me-2" onclick="editService(${service.id})">
                         <i class="bi bi-pencil"></i> 编辑
                     </button>
@@ -4291,6 +4303,39 @@ function monitorSingleService(serviceId) {
     .catch(error => {
         console.error('监控单个服务失败:', error);
         showAlert('监控单个服务失败', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    });
+}
+
+// 从服务配置页面监控服务器的所有服务
+function monitorServerFromServices(serverId, serverName) {
+    if (!confirm(`确定要立即监控服务器 "${serverName}" 的所有服务吗？`)) {
+        return;
+    }
+    
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    btn.disabled = true;
+    
+    safeFetch(`/api/services/monitor/${serverId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`服务器 "${serverName}" 的服务监控完成！`, 'success');
+            loadServices(); // 重新加载数据
+        } else {
+            showAlert(`监控失败: ${data.message}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('监控服务器服务失败:', error);
+        showAlert('监控服务器服务失败', 'danger');
     })
     .finally(() => {
         btn.innerHTML = originalHtml;
