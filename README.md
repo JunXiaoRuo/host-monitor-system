@@ -55,7 +55,7 @@ cp .env.example .env
 # 编辑.env文件，修改相关配置
 # 重要：修改SECRET_KEY和ENCRYPTION_KEY为强密码
 # SECRET_KEY生成命令：python -c "import secrets; print(secrets.token_urlsafe(32))"
-# ENCRYPTION_KEY生成命令：python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# ENCRYPTION_KEY生成命令：python -c "import os; import base64; key_bytes = os.urandom(32); print(base64.b64encode(key_bytes).decode())"
 ```
 
 **必要的配置项**：
@@ -149,7 +149,7 @@ cp .env.example .env
 # 编辑.env文件，修改相关配置
 # 重要：修改SECRET_KEY和ENCRYPTION_KEY为强密码
 # SECRET_KEY生成命令：python -c "import secrets; print(secrets.token_urlsafe(32))"
-# ENCRYPTION_KEY生成命令：python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# ENCRYPTION_KEY生成命令：python -c "import os; import base64; key_bytes = os.urandom(32); print(base64.b64encode(key_bytes).decode())"
 vim .env
 
 # 快速启动脚本
@@ -371,7 +371,7 @@ vim .env  # 或使用其他编辑器
 | 配置项 | 默认值 | 说明 |
 |---------|---------|--------|
 | `SECRET_KEY` | (需要设置) | Flask应用安全密钥 |
-| `ENCRYPTION_KEY` | (需要设置) | 数据加密密钥（必须为44位Fernet格式） |
+| `ENCRYPTION_KEY` | (需要设置) | 数据加密密钥（必须为Fernet格式） |
 | `HOST` | 0.0.0.0 | 监听IP地址 |
 | `PORT` | 5000 | 监听端口 |
 | `DEBUG` | True | 调试模式 |
@@ -390,12 +390,10 @@ vim .env  # 或使用其他编辑器
 python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(32))"
 
 # 生成ENCRYPTION_KEY（数据加密密钥，必须为Fernet格式）
-python -c "from cryptography.fernet import Fernet; print('ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
+python -c "import os; import base64; key_bytes = os.urandom(32); print(base64.b64encode(key_bytes).decode())"
 ```
 
 **重要提示**:
-- `SECRET_KEY` 可以使用 `secrets.token_urlsafe(32)` 生成，长度为43个字符
-- `ENCRYPTION_KEY` 必须使用 `Fernet.generate_key()` 生成，长度为44个字符
 - 两个密钥的格式不同，不能混用
 - 生产环境中请妥善保管这些密钥，丢失将导致无法解密已存储的数据
 

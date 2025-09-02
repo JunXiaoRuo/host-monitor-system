@@ -25,6 +25,43 @@ os.chdir(basedir)
 from log_config import setup_logging
 logger = setup_logging('production', 'INFO', False)  # 生产环境不显示控制台日志
 
+# 额外确保所有日志都不会输出到控制台
+import logging
+
+# 禁用根日志器的控制台输出
+root_logger = logging.getLogger()
+for handler in root_logger.handlers[:]:
+    if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+        root_logger.removeHandler(handler)
+
+# 设置所有已知可能产生控制台输出的日志器
+silent_loggers = [
+    'apscheduler',
+    'apscheduler.scheduler', 
+    'apscheduler.executors',
+    'apscheduler.jobstores',
+    'apscheduler.executors.default',
+    'werkzeug',
+    'urllib3',
+    'requests',
+    'paramiko',
+    'cryptography',
+    'sqlalchemy.engine',
+    'sqlalchemy.pool'
+]
+
+for logger_name in silent_loggers:
+    silent_logger = logging.getLogger(logger_name)
+    silent_logger.setLevel(logging.ERROR)  # 提高到ERROR级别，避免WARNING输出
+    # 移除控制台处理器
+    for handler in silent_logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            silent_logger.removeHandler(handler)
+    # 设置不传播到父日志器
+    silent_logger.propagate = False
+    # 确保没有处理器
+    silent_logger.handlers.clear()
+
 logger.info(f"项目根目录: {basedir}")
 logger.info(f"当前工作目录: {os.getcwd()}")
 logger.info(f"切换后工作目录: {os.getcwd()}")

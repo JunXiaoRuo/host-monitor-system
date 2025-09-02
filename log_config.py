@@ -172,6 +172,28 @@ def setup_logging(app_name: str = 'main', log_level: str = 'INFO', console_outpu
     error_handler.setLevel(logging.ERROR)
     logger.addHandler(error_handler)
     
+    # 4. 如果禁用控制台输出，确保第三方库也不会输出到控制台
+    if not console_output:
+        # 设置常见第三方库的日志级别，防止它们输出到控制台
+        third_party_loggers = [
+            'urllib3',
+            'requests',
+            'paramiko',
+            'cryptography',
+            'sqlalchemy',
+            'flask',
+            'werkzeug'
+        ]
+        
+        for logger_name in third_party_loggers:
+            third_party_logger = logging.getLogger(logger_name)
+            third_party_logger.setLevel(logging.ERROR)  # 提高到ERROR级别
+            # 移除可能存在的控制台处理器
+            for handler in third_party_logger.handlers[:]:
+                if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                    third_party_logger.removeHandler(handler)
+            third_party_logger.propagate = False
+    
     return logger
 
 
@@ -206,6 +228,28 @@ def setup_flask_app_logging(app, app_name: str = 'flask', console_output: bool =
     if not console_output:
         # 如果不需要控制台输出，将werkzeug日志级别设置为WARNING，减少输出
         werkzeug_logger.setLevel(logging.WARNING)
+    
+    # 配置APScheduler相关日志，防止跨天时输出到控制台
+    apscheduler_loggers = [
+        'apscheduler',
+        'apscheduler.scheduler',
+        'apscheduler.executors',
+        'apscheduler.jobstores',
+        'apscheduler.executors.default'
+    ]
+    
+    for logger_name in apscheduler_loggers:
+        apscheduler_logger = logging.getLogger(logger_name)
+        if not console_output:
+            # 生产环境下，APScheduler日志只输出到文件，不输出到控制台
+            apscheduler_logger.setLevel(logging.ERROR)  # 提高到ERROR级别
+            # 移除可能存在的控制台处理器
+            for handler in apscheduler_logger.handlers[:]:
+                if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                    apscheduler_logger.removeHandler(handler)
+            apscheduler_logger.propagate = False
+        else:
+            apscheduler_logger.setLevel(logging.INFO)
     
     return app.logger
 
