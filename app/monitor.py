@@ -25,12 +25,20 @@ class HostMonitor:
     def server_service(self):
         """延迟初始化服务器服务"""
         if self._server_service is None:
-            from flask import has_app_context
+            from flask import has_app_context, current_app
             if has_app_context():
                 self._server_service = ServerService()
             else:
-                from app import create_app
-                app = create_app()
+                # 如果没有应用上下文，创建一个最小化的应用实例
+                from flask import Flask
+                from config import Config
+                app = Flask(__name__)
+                app.config.from_object(Config)
+                
+                # 只初始化数据库，不初始化调度器和服务监控
+                from app.models import db as database
+                database.init_app(app)
+                
                 with app.app_context():
                     self._server_service = ServerService()
         return self._server_service
@@ -39,12 +47,20 @@ class HostMonitor:
     def threshold_service(self):
         """延迟初始化阈值服务"""
         if self._threshold_service is None:
-            from flask import has_app_context
+            from flask import has_app_context, current_app
             if has_app_context():
                 self._threshold_service = ThresholdService()
             else:
-                from app import create_app
-                app = create_app()
+                # 如果没有应用上下文，创建一个最小化的应用实例
+                from flask import Flask
+                from config import Config
+                app = Flask(__name__)
+                app.config.from_object(Config)
+                
+                # 只初始化数据库，不初始化调度器和服务监控
+                from app.models import db as database
+                database.init_app(app)
+                
                 with app.app_context():
                     self._threshold_service = ThresholdService()
         return self._threshold_service
@@ -73,8 +89,16 @@ class HostMonitor:
         if has_app_context():
             return _monitor_with_context()
         else:
-            from app import create_app
-            app = create_app()
+            # 如果没有应用上下文，创建一个最小化的应用实例
+            from flask import Flask
+            from config import Config
+            app = Flask(__name__)
+            app.config.from_object(Config)
+            
+            # 只初始化数据库，不初始化调度器和服务监控
+            from app.models import db as database
+            database.init_app(app)
+            
             with app.app_context():
                 return _monitor_with_context()
     
@@ -260,9 +284,16 @@ class HostMonitor:
                 # 已经在应用上下文中，直接保存
                 return _save_to_db()
             else:
-                # 没有应用上下文，创建一个
-                from app import create_app
-                app = create_app()
+                # 如果没有应用上下文，创建一个最小化的应用实例
+                from flask import Flask
+                from config import Config
+                app = Flask(__name__)
+                app.config.from_object(Config)
+                
+                # 只初始化数据库，不初始化调度器和服务监控
+                from app.models import db as database
+                database.init_app(app)
+                
                 with app.app_context():
                     return _save_to_db()
             
@@ -293,8 +324,16 @@ class HostMonitor:
         if has_app_context():
             servers, thresholds = _get_servers_and_thresholds()
         else:
-            from app import create_app
-            app = create_app()
+            # 如果没有应用上下文，创建一个最小化的应用实例
+            from flask import Flask
+            from config import Config
+            app = Flask(__name__)
+            app.config.from_object(Config)
+            
+            # 只初始化数据库，不初始化调度器和服务监控
+            from app.models import db as database
+            database.init_app(app)
+            
             with app.app_context():
                 servers, thresholds = _get_servers_and_thresholds()
         
@@ -411,8 +450,16 @@ class HostMonitor:
             if has_app_context():
                 return _get_history()
             else:
-                from app import create_app
-                app = create_app()
+                # 如果没有应用上下文，创建一个最小化的应用实例
+                from flask import Flask
+                from config import Config
+                app = Flask(__name__)
+                app.config.from_object(Config)
+                
+                # 只初始化数据库，不初始化调度器和服务监控
+                from app.models import db as database
+                database.init_app(app)
+                
                 with app.app_context():
                     return _get_history()
             
@@ -462,8 +509,16 @@ class HostMonitor:
             if has_app_context():
                 return _get_status()
             else:
-                from app import create_app
-                app = create_app()
+                # 如果没有应用上下文，创建一个最小化的应用实例
+                from flask import Flask
+                from config import Config
+                app = Flask(__name__)
+                app.config.from_object(Config)
+                
+                # 只初始化数据库，不初始化调度器和服务监控
+                from app.models import db as database
+                database.init_app(app)
+                
                 with app.app_context():
                     return _get_status()
             
@@ -500,8 +555,16 @@ class HostMonitor:
             if has_app_context():
                 return _cleanup()
             else:
-                from app import create_app
-                app = create_app()
+                # 如果没有应用上下文，创建一个最小化的应用实例
+                from flask import Flask
+                from config import Config
+                app = Flask(__name__)
+                app.config.from_object(Config)
+                
+                # 只初始化数据库，不初始化调度器和服务监控
+                from app.models import db as database
+                database.init_app(app)
+                
                 with app.app_context():
                     return _cleanup()
             

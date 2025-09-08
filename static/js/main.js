@@ -1586,6 +1586,14 @@ function renderSchedulesTable(schedules) {
             configText = `${days[config.day_of_week || 0]} ${config.hour || 0}:${(config.minute || 0).toString().padStart(2, '0')}`;
         } else if (schedule.task_type === 'monthly') {
             configText = `每月${config.day || 1}日 ${config.hour || 0}:${(config.minute || 0).toString().padStart(2, '0')}`;
+        } else if (schedule.task_type === 'interval') {
+            const typeMap = {
+                'hours': '小时',
+                'minutes': '分钟', 
+                'days': '天'
+            };
+            const typeName = typeMap[config.interval_type] || config.interval_type;
+            configText = `每${config.interval_value}${typeName}`;
         }
         
         html += `
@@ -1646,6 +1654,7 @@ function showScheduleModal(scheduleId = null) {
                                     <option value="daily">每日</option>
                                     <option value="weekly">每周</option>
                                     <option value="monthly">每月</option>
+                                    <option value="interval">间隔执行</option>
                                 </select>
                             </div>
                             <div id="scheduleConfig"></div>
@@ -1692,6 +1701,9 @@ function showScheduleModal(scheduleId = null) {
                 document.getElementById('monthlyDay').value = config.day || 1;
                 document.getElementById('monthlyHour').value = config.hour || 0;
                 document.getElementById('monthlyMinute').value = config.minute || 0;
+            } else if (schedule.task_type === 'interval') {
+                document.getElementById('intervalType').value = config.interval_type || 'hours';
+                document.getElementById('intervalValue').value = config.interval_value || 1;
             }
         }
     }
@@ -1802,6 +1814,27 @@ function updateScheduleConfig() {
                 </div>
             </div>
         `;
+    } else if (type === 'interval') {
+        html = `
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="intervalType" class="form-label">间隔类型</label>
+                        <select class="form-select" id="intervalType">
+                            <option value="hours">小时</option>
+                            <option value="minutes">分钟</option>
+                            <option value="days">天</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="intervalValue" class="form-label">间隔数值</label>
+                        <input type="number" class="form-control" id="intervalValue" min="1" value="1">
+                    </div>
+                </div>
+            </div>
+        `;
     }
     
     container.innerHTML = html;
@@ -1834,6 +1867,19 @@ function saveSchedule(scheduleId = null) {
             day: parseInt(document.getElementById('monthlyDay').value),
             hour: parseInt(document.getElementById('monthlyHour').value),
             minute: parseInt(document.getElementById('monthlyMinute').value)
+        };
+    } else if (taskType === 'interval') {
+        const intervalType = document.getElementById('intervalType').value;
+        const intervalValue = parseInt(document.getElementById('intervalValue').value);
+        
+        if (!intervalValue || intervalValue < 1) {
+            showAlert('请输入有效的间隔数值', 'warning');
+            return;
+        }
+        
+        scheduleConfig = {
+            interval_type: intervalType,
+            interval_value: intervalValue
         };
     }
     

@@ -21,9 +21,22 @@ def execute_monitor_task_static(task_id: int, database_url: str, report_dir: str
     try:
         # 更新任务最后执行时间
         from app.models import db, ScheduleTask, MonitorReport
-        from app import create_app
+        from flask import current_app
         
-        app = create_app()
+        # 使用当前应用上下文，避免重新创建应用实例
+        if current_app:
+            app = current_app
+        else:
+            # 如果没有当前应用上下文，创建一个最小化的应用实例
+            from flask import Flask
+            from config import Config
+            app = Flask(__name__)
+            app.config.from_object(Config)
+            
+            # 只初始化数据库，不初始化调度器和服务监控
+            from app.models import db as database
+            database.init_app(app)
+            
         with app.app_context():
             # 创建新的服务实例（在应用上下文中）
             from app.monitor import HostMonitor
@@ -38,6 +51,28 @@ def execute_monitor_task_static(task_id: int, database_url: str, report_dir: str
                 return
             
             task.last_run = datetime.now()
+            
+            # 更新下次执行时间 - 从调度器获取
+            try:
+                from app.scheduler import SchedulerService
+                scheduler_service = SchedulerService.get_instance()
+                if scheduler_service and scheduler_service.scheduler and scheduler_service.scheduler.running:
+                    job_id = f"task_{task_id}"
+                    job = scheduler_service.scheduler.get_job(job_id)
+                    if job and job.next_run_time:
+                        # 将UTC时间转换为本地时间
+                        from datetime import timezone, timedelta
+                        china_tz = timezone(timedelta(hours=8))
+                        next_run_local = job.next_run_time.astimezone(china_tz).replace(tzinfo=None)
+                        task.next_run = next_run_local
+                        logger.info(f"任务 {task.name} 下次执行时间更新为: {task.next_run}")
+                    else:
+                        logger.warning(f"无法获取任务 {task.name} 的下次执行时间")
+                else:
+                    logger.warning("调度器未运行，无法更新下次执行时间")
+            except Exception as update_error:
+                logger.error(f"更新下次执行时间失败: {str(update_error)}")
+            
             db.session.commit()
             
             logger.info(f"开始执行计划任务: {task.name}")
@@ -112,6 +147,13 @@ class SchedulerService:
         self.database_url = database_url or 'sqlite:///host_monitor.db'
         self._setup_scheduler()
         self._initialized = True
+    
+    @classmethod
+    def get_instance(cls, database_url: Optional[str] = None, report_dir: str = "reports"):
+        """获取单例实例"""
+        if cls._instance is None:
+            cls._instance = cls(database_url, report_dir)
+        return cls._instance
     
     def _setup_scheduler(self):
         """设置调度器"""

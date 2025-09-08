@@ -71,7 +71,7 @@ class ScheduleTask(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, comment='任务名称')
-    task_type = db.Column(db.String(20), nullable=False, comment='任务类型: daily/weekly/monthly')
+    task_type = db.Column(db.String(20), nullable=False, comment='任务类型: daily/weekly/monthly/interval')
     schedule_config = db.Column(db.Text, comment='调度配置JSON')
     is_active = db.Column(db.Boolean, default=True, comment='是否启用')
     last_run = db.Column(db.DateTime, comment='最后执行时间')

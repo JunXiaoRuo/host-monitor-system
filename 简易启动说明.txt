@@ -1,10 +1,15 @@
 1、安装Python3.8，并配置环境变量，打开cmd终端输入“python -V”输出版本号即可。
 
-2、依赖安装，在项目目录打开终端输入pip install -r requirements.txt安装依赖，无法联网的机器请看README.md文件的“内网离线部署”章节。
+2、替换为国内下载源，不然第三步很慢
+pip3 config set global.index-url https://repo.huaweicloud.com/repository/pypi/simple
+pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
-3、（重要）将根目录下的.env.example复制为.env，并设置SECRET_KEY和ENCRYPTION_KEY的值。
+3、依赖安装，在项目目录打开终端输入pip install -r requirements.txt安装依赖，无法联网的机器请看README.md文件的“内网离线部署”章节。
 
-4、windows系统双击start.bat运行，Linux\MACx系统运行start.sh
+4、（重要）将根目录下的.env.example复制为.env，并设置SECRET_KEY和ENCRYPTION_KEY的值。
+
+5、windows系统双击start.bat运行，Linux\MACx系统运行start.sh
 
 
 更多内容请看根目录下README.md文件说明。
