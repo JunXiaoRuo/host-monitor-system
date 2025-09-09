@@ -250,7 +250,7 @@ class ServiceMonitorService:
                     if latest_log:
                         if latest_log.status == 'running':
                             normal_count += 1
-                        elif latest_log.status in ['stopped', 'error']:
+                        elif latest_log.status in ['stopped', 'error', 'connection_failed']:
                             error_count += 1
                 
                 server_dict.update({
@@ -375,7 +375,32 @@ class ServiceMonitorService:
             
         except Exception as e:
             logger.error(f"监控服务器 {server_id} 的服务失败: {str(e)}")
-            return {'success': False, 'message': f'监控失败: {str(e)}', 'results': []}
+            
+            # SSH连接失败时，为每个服务创建连接失败的监控记录
+            services = ServiceConfig.query.filter_by(
+                server_id=server_id,
+                is_monitoring=True
+            ).all()
+            
+            results = []
+            for service in services:
+                # 创建连接失败的监控结果
+                connection_failed_result = {
+                    'service_id': service.id,
+                    'service_name': service.service_name,
+                    'server_name': server.name,
+                    'status': 'connection_failed',
+                    'process_count': 0,
+                    'process_info': [],
+                    'error_message': f'SSH连接失败: {str(e)}',
+                    'monitor_time': datetime.now().isoformat()
+                }
+                results.append(connection_failed_result)
+                
+                # 保存监控结果到数据库
+                self._save_service_monitor_result(connection_failed_result)
+            
+            return {'success': False, 'message': f'监控失败: {str(e)}', 'results': results}
     
     def _monitor_single_service(self, ssh_client, service_config: ServiceConfig) -> Dict[str, Any]:
         """
@@ -403,44 +428,24 @@ class ServiceMonitorService:
             # 使用ps命令查找进程，显式使用/bin/sh来避免shell兼容性问题
             cmd = f"/bin/sh -c \"ps aux | grep '{service_config.process_name}' | grep -v grep\""
             logger.info(f"执行命令: {cmd}")
-            stdin, stdout, stderr = ssh_client.exec_command(cmd)
             
-            # 安全地解码输出，处理编码问题
-            output_bytes = stdout.read()
-            logger.info(f"原始输出字节数: {len(output_bytes)}")
-            logger.info(f"原始输出字节内容: {output_bytes}")
+            # 使用SSH管理器的execute_command方法，获得重试机制和更好的错误处理
+            cmd_result = self.ssh_manager.execute_command(ssh_client, cmd)
             
-            try:
-                output = output_bytes.decode('utf-8').strip()
-                logger.info(f"UTF-8解码成功: {repr(output)}")
-            except UnicodeDecodeError as e:
-                logger.warning(f"UTF-8解码失败: {e}")
-                try:
-                    # 尝试使用gbk编码（中文系统常用）
-                    output = output_bytes.decode('gbk').strip()
-                    logger.info(f"GBK解码成功: {repr(output)}")
-                except UnicodeDecodeError as e2:
-                    logger.warning(f"GBK解码失败: {e2}")
-                    # 如果都失败，使用错误忽略模式
-                    output = output_bytes.decode('utf-8', errors='ignore').strip()
-                    logger.info(f"忽略错误解码: {repr(output)}")
+            if not cmd_result['success']:
+                result['status'] = 'error'
+                result['error_message'] = cmd_result['stderr'] or f"命令执行失败，退出码: {cmd_result['exit_code']}"
+                logger.error(f"SSH命令执行失败: {result['error_message']}")
+                return result
             
-            error_bytes = stderr.read()
-            logger.info(f"错误输出字节数: {len(error_bytes)}")
+            # 获取命令输出
+            output = cmd_result['stdout'].strip()
+            error = cmd_result['stderr'].strip()
             
-            try:
-                error = error_bytes.decode('utf-8').strip()
-                if error:
-                    logger.warning(f"命令执行错误: {repr(error)}")
-            except UnicodeDecodeError:
-                try:
-                    error = error_bytes.decode('gbk').strip()
-                    if error:
-                        logger.warning(f"命令执行错误(GBK): {repr(error)}")
-                except UnicodeDecodeError:
-                    error = error_bytes.decode('utf-8', errors='ignore').strip()
-                    if error:
-                        logger.warning(f"命令执行错误(忽略): {repr(error)}")
+            logger.info(f"命令执行成功，耗时: {cmd_result['execution_time']:.2f}秒")
+            logger.info(f"输出内容: {repr(output)}")
+            if error:
+                logger.warning(f"命令执行错误: {repr(error)}")
             
             if error:
                 # 检查是否是shell配置文件的非关键错误
@@ -547,7 +552,7 @@ class ServiceMonitorService:
                 service_config.last_monitor_time = datetime.now()
                 
                 # 处理首次异常时间
-                if result['status'] in ['stopped', 'error']:
+                if result['status'] in ['stopped', 'error', 'connection_failed']:
                     # 异常状态，设置首次异常时间（如果还没有的话）
                     if not service_config.first_error_time:
                         service_config.first_error_time = datetime.now()
@@ -585,6 +590,7 @@ class ServiceMonitorService:
                 server_results.append(server_result)
                 
                 if server_result['success']:
+                    # SSH连接成功，统计服务监控结果
                     for service_result in server_result['results']:
                         total_services += 1
                         
@@ -600,6 +606,24 @@ class ServiceMonitorService:
                                 'status': service_result['status'],
                                 'error_message': service_result.get('error_message', '')
                             })
+                else:
+                    # SSH连接失败，统计该服务器上的所有服务为异常
+                    services = ServiceConfig.query.filter_by(
+                        server_id=server.id,
+                        is_monitoring=True
+                    ).all()
+                    
+                    for service in services:
+                        total_services += 1
+                        error_services += 1
+                        # 收集SSH连接失败的服务信息用于通知
+                        service_alerts.append({
+                            'server_name': server.name,
+                            'server_ip': server.host,
+                            'service_name': service.service_name,
+                            'status': 'connection_failed',
+                            'error_message': server_result.get('message', 'SSH连接失败')
+                        })
             
             # 发送服务监控通知（如果有异常）
             if service_alerts:
@@ -640,10 +664,18 @@ class ServiceMonitorService:
             if alerts:
                 content += "\n异常服务详情:\n"
                 for alert in alerts:  # 显示所有异常服务
-                    status_text = "已停止" if alert['status'] == 'stopped' else "监控失败"
+                    if alert['status'] == 'stopped':
+                        status_text = "已停止"
+                    elif alert['status'] == 'connection_failed':
+                        status_text = "连接失败"
+                    else:
+                        status_text = "监控失败"
                     # 添加IP地址信息
                     server_info = f"{alert['server_name']}({alert.get('server_ip', 'N/A')})"
                     content += f"- {server_info} | {alert['service_name']} | {status_text}\n"
+                    # 如果有错误信息，也显示出来
+                    if alert.get('error_message'):
+                        content += f"  错误: {alert['error_message']}\n"
             
             content += "\n更多内容可查看服务配置页面！"
             
@@ -868,7 +900,7 @@ class ServiceMonitorService:
                 if latest_log:
                     if latest_log.status == 'running':
                         normal_count += 1
-                    elif latest_log.status in ['stopped', 'error']:
+                    elif latest_log.status in ['stopped', 'error', 'connection_failed']:
                         error_count += 1
             
             return {

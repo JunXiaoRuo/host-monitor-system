@@ -1039,6 +1039,7 @@ function getServiceStatusClass(status, isMonitoring) {
         case 'running': return 'bg-success';
         case 'stopped': return 'bg-warning';
         case 'error': return 'bg-danger';
+        case 'connection_failed': return 'bg-warning';
         default: return 'bg-info';
     }
 }
@@ -1051,6 +1052,7 @@ function getServiceStatusText(status, isMonitoring) {
         case 'running': return '正常';
         case 'stopped': return '停止';
         case 'error': return '错误';
+        case 'connection_failed': return '连接失败';
         default: return '未知';
     }
 }
@@ -3751,7 +3753,7 @@ function renderServices() {
         if (server.services) {
             server.services.forEach(service => {
                 if (service.is_monitoring && 
-                    (service.latest_status === 'stopped' || service.latest_status === 'error')) {
+                    (service.latest_status === 'stopped' || service.latest_status === 'error' || service.latest_status === 'connection_failed')) {
                     errorServices.push({
                         ...service,
                         server_name: server.name,
@@ -3772,7 +3774,12 @@ function renderServices() {
             
             let errorHtml = '';
             errorServices.forEach(service => {
-                const statusText = service.latest_status === 'stopped' ? '异常' : '错误';
+                let statusText = '错误';
+                if (service.latest_status === 'stopped') {
+                    statusText = '异常';
+                } else if (service.latest_status === 'connection_failed') {
+                    statusText = '连接失败';
+                }
                 
                 // 格式化首次异常时间
                 const firstErrorTime = service.first_error_time ? 
@@ -3969,6 +3976,7 @@ function getServiceStatusClass(status, isMonitoring) {
         case 'running': return 'bg-success';
         case 'stopped': return 'bg-danger';
         case 'error': return 'bg-danger';
+        case 'connection_failed': return 'bg-warning';
         default: return 'bg-secondary';
     }
 }
@@ -3981,6 +3989,7 @@ function getServiceStatusText(status, isMonitoring) {
         case 'running': return '正常';
         case 'stopped': return '异常';
         case 'error': return '异常';
+        case 'connection_failed': return '连接失败';
         default: return '未知';
     }
 }
