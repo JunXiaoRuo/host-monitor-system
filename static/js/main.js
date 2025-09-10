@@ -8,6 +8,9 @@ let thresholdsData = {};
 let servicesData = [];
 let expandedServers = new Set();
 let currentServiceModal = null;
+// 状态保持变量
+let alertsExpanded = true; // 告警概览默认展开
+let serversExpanded = false; // 服务器详情默认关闭
 
 // 全局变量用于跟踪当前分页和筛选状态
 let currentLogsPage = 1;
@@ -331,6 +334,8 @@ function showSection(sectionName) {
 
 // 初始化仪表板
 function initDashboard() {
+    // 先加载阈值数据，然后刷新仪表板
+    loadThresholds();
     refreshDashboard();
 }
 
@@ -343,6 +348,7 @@ function refreshDashboard() {
         .then(data => {
             if (data.success) {
                 updateDashboardMetrics(data.data);
+                updateAlertsOverview(data.data.alerts_overview || []);
                 updateServerStatusList(data.data.server_status);
                 updateLastUpdateTime();
             } else {
@@ -367,6 +373,69 @@ function updateDashboardMetrics(data) {
     if (data.services_overview) {
         updateServicesOverview(data.services_overview);
     }
+}
+
+// 更新告警概览
+function updateAlertsOverview(alertsOverview) {
+    const container = document.getElementById('alertsOverview');
+    
+    if (!alertsOverview || alertsOverview.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted">
+                <i class="bi bi-check-circle"></i>
+                暂无告警信息
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    alertsOverview.forEach(alert => {
+        const statusClass = alert.status === 'warning' ? 'warning' : 'danger';
+        const statusIcon = alert.status === 'warning' ? 'exclamation-triangle' : 'x-circle';
+        
+        html += `
+            <div class="alert alert-${statusClass} mb-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="alert-heading mb-1">
+                            <i class="bi bi-${statusIcon}"></i>
+                            ${alert.server_name} (${alert.server_ip})
+                        </h6>
+                        <div class="alert-details">
+                            ${alert.alert_details.map(detail => `<div class="mb-1">${detail}</div>`).join('')}
+                        </div>
+                        <small class="text-muted">
+                            监控时间: ${alert.monitor_time ? new Date(alert.monitor_time).toLocaleString('zh-CN') : '未知'}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    
+    // 恢复告警概览展开状态
+    setTimeout(() => {
+        const toggleButton = document.getElementById('toggleAllAlerts');
+        if (toggleButton) {
+            const icon = toggleButton.querySelector('i');
+            const buttonText = toggleButton.childNodes[2];
+            
+            if (!alertsExpanded) {
+                // 如果应该关闭状态
+                container.style.display = 'none';
+                if (icon) icon.className = 'bi bi-chevron-down';
+                if (buttonText) buttonText.textContent = '\n                                                一键展开\n                                            ';
+            } else {
+                // 如果应该展开状态（默认）
+                container.style.display = 'block';
+                if (icon) icon.className = 'bi bi-chevron-up';
+                if (buttonText) buttonText.textContent = '\n                                                一键关闭\n                                            ';
+            }
+        }
+    }, 50);
 }
 
 // 更新服务器状态列表
@@ -401,16 +470,85 @@ function updateServerStatusList(serverStatus) {
                     </div>
                 </div>
                 <div class="row mt-2">
-                    <div class="col-md-3"><small>CPU: ${status.cpu_usage !== null && status.cpu_usage !== undefined ? status.cpu_usage.toFixed(1) + '%' : 'N/A'}</small></div>
-                    <div class="col-md-3"><small>内存: ${status.memory_usage !== null && status.memory_usage !== undefined ? status.memory_usage.toFixed(1) + '%' : 'N/A'}</small></div>
-                    <div class="col-md-3"><small>告警: ${status.alert_count || 0}个</small></div>
-                    <div class="col-md-3"><small>耗时: ${status.execution_time ? status.execution_time.toFixed(2) + 's' : 'N/A'}</small></div>
+                    <div class="col-md-2"><small>CPU: ${(() => {
+                        if (status.cpu_usage !== null && status.cpu_usage !== undefined) {
+                            const cpuThreshold = thresholdsData?.cpu_threshold || 80;
+                            const isOverThreshold = status.cpu_usage > cpuThreshold;
+                            const colorClass = isOverThreshold ? 'text-danger fw-bold' : '';
+                            return `<span class="${colorClass}">${status.cpu_usage.toFixed(1)}%</span>`;
+                        }
+                        return 'N/A';
+                    })()}</small></div>
+                    <div class="col-md-2"><small>内存: ${(() => {
+                        if (status.memory_usage !== null && status.memory_usage !== undefined) {
+                            const memoryThreshold = thresholdsData?.memory_threshold || 80;
+                            const isOverThreshold = status.memory_usage > memoryThreshold;
+                            const colorClass = isOverThreshold ? 'text-danger fw-bold' : '';
+                            return `<span class="${colorClass}">${status.memory_usage.toFixed(1)}%</span>`;
+                        }
+                        return 'N/A';
+                    })()}</small></div>
+                    <div class="col-md-2"><small>磁盘(max): ${status.max_disk_usage !== null && status.max_disk_usage !== undefined ? status.max_disk_usage.toFixed(1) + '%' : 'N/A'}</small></div>
+                    <div class="col-md-2"><small>告警: ${status.alert_count || 0}个</small></div>
+                    <div class="col-md-2"><small>耗时: ${status.execution_time ? status.execution_time.toFixed(2) + 's' : 'N/A'}</small></div>
+                    <div class="col-md-2"><small><button class="btn btn-sm btn-outline-secondary" onclick="toggleServerDetails('${serverId}')" title="展开详情"><i class="bi bi-chevron-down"></i></button></small></div>
+                </div>
+                <div id="server-details-${serverId}" class="server-details" style="display: none;">
+                    <!-- 详细信息将在这里显示 -->
                 </div>
             </div>
         `;
     }
     
     container.innerHTML = html;
+    
+    // 恢复服务器展开状态
+    setTimeout(() => {
+        // 恢复一键展开状态
+        if (serversExpanded) {
+            const allDetailsDiv = document.querySelectorAll('[id^="server-details-"]');
+            const allToggleButtons = document.querySelectorAll('[onclick^="toggleServerDetails"]');
+            const toggleButton = document.getElementById('toggleAllServers');
+            
+            if (allDetailsDiv.length > 0) {
+                allDetailsDiv.forEach((div, index) => {
+                    div.style.display = 'block';
+                    const serverId = div.id.replace('server-details-', '');
+                    expandedServers.add(serverId);
+                    loadServerDiskDetails(serverId);
+                });
+                
+                allToggleButtons.forEach(btn => {
+                    const btnIcon = btn.querySelector('i');
+                    if (btnIcon) {
+                        btnIcon.className = 'bi bi-chevron-up';
+                    }
+                });
+                
+                if (toggleButton) {
+                    const icon = toggleButton.querySelector('i');
+                    const buttonText = toggleButton.childNodes[2];
+                    if (icon) icon.className = 'bi bi-chevron-up';
+                    if (buttonText) buttonText.textContent = '\n                                一键关闭\n                            ';
+                }
+            }
+        } else {
+            // 恢复单个服务器展开状态
+            expandedServers.forEach(serverId => {
+                const detailsDiv = document.getElementById(`server-details-${serverId}`);
+                const toggleButton = document.querySelector(`[onclick="toggleServerDetails('${serverId}')"]`);
+                
+                if (detailsDiv && toggleButton) {
+                    detailsDiv.style.display = 'block';
+                    const btnIcon = toggleButton.querySelector('i');
+                    if (btnIcon) {
+                        btnIcon.className = 'bi bi-chevron-up';
+                    }
+                    loadServerDiskDetails(serverId);
+                }
+            });
+        }
+    }, 100);
 }
 
 // 更新最后更新时间
@@ -445,6 +583,196 @@ function executeMonitor() {
         btn.innerHTML = originalText;
         btn.disabled = false;
     });
+}
+
+// 切换服务器详情显示
+function toggleServerDetails(serverId) {
+    const detailsDiv = document.getElementById(`server-details-${serverId}`);
+    const button = event.target.closest('button');
+    const icon = button.querySelector('i');
+    
+    if (detailsDiv.style.display === 'none') {
+        // 展开详情
+        detailsDiv.style.display = 'block';
+        icon.className = 'bi bi-chevron-up';
+        expandedServers.add(serverId);
+        
+        // 加载详细磁盘信息
+        loadServerDiskDetails(serverId);
+    } else {
+        // 收起详情
+        detailsDiv.style.display = 'none';
+        icon.className = 'bi bi-chevron-down';
+        expandedServers.delete(serverId);
+    }
+}
+
+// 加载服务器磁盘详情
+function loadServerDiskDetails(serverId) {
+    const detailsDiv = document.getElementById(`server-details-${serverId}`);
+    detailsDiv.innerHTML = '<div class="text-center"><i class="bi bi-hourglass-split"></i> 加载中...</div>';
+    
+    safeFetch(`/api/server/${serverId}/disk-details`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.data) {
+            renderServerDiskDetails(serverId, data.data);
+        } else {
+            detailsDiv.innerHTML = '<div class="text-muted">暂无详细磁盘信息</div>';
+        }
+    })
+    .catch(error => {
+        detailsDiv.innerHTML = '<div class="text-danger">加载磁盘详情失败</div>';
+    });
+}
+
+// 渲染服务器磁盘详情
+function renderServerDiskDetails(serverId, diskData) {
+    const detailsDiv = document.getElementById(`server-details-${serverId}`);
+    
+    if (!diskData || !diskData.disk_info || diskData.disk_info.length === 0) {
+        detailsDiv.innerHTML = '<div class="text-muted">暂无磁盘信息</div>';
+        return;
+    }
+    
+    let html = '<div class="mt-2"><h6>磁盘详情:</h6><div class="row">';
+    
+    diskData.disk_info.forEach((disk, index) => {
+        const usagePercent = disk.use_percent || 0;
+        const statusClass = usagePercent > 90 ? 'danger' : usagePercent > 80 ? 'warning' : 'success';
+        
+        html += `
+            <div class="col-md-6 mb-2">
+                <div class="card card-sm">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${disk.mounted_on || 'N/A'}</strong>
+                                <br>
+                                <small class="text-muted">${disk.filesystem || 'N/A'}</small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-${statusClass}">${usagePercent.toFixed(1)}%</span>
+                                <br>
+                                <small class="text-muted">
+                                    ${formatBytes(disk.used || '0')} / ${formatBytes(disk.size || '0')}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="progress mt-1" style="height: 4px;">
+                            <div class="progress-bar bg-${statusClass}" style="width: ${usagePercent}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div></div>';
+    detailsDiv.innerHTML = html;
+}
+
+// 格式化字节数
+function formatBytes(bytes) {
+    if (bytes === 0 || bytes === null || bytes === undefined) return '0 B';
+    
+    // 如果是字符串格式（如'1.5G'），直接返回
+    if (typeof bytes === 'string') {
+        return bytes;
+    }
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 一键展开/关闭所有服务器详情
+function toggleAllServerDetails() {
+    const toggleButton = document.getElementById('toggleAllServers');
+    const icon = toggleButton.querySelector('i');
+    const buttonText = toggleButton.childNodes[2]; // 获取按钮文本节点
+    
+    // 获取所有服务器详情区域
+    const allDetailsDiv = document.querySelectorAll('[id^="server-details-"]');
+    const allToggleButtons = document.querySelectorAll('[onclick^="toggleServerDetails"]');
+    
+    if (allDetailsDiv.length === 0) {
+        return;
+    }
+    
+    // 检查当前状态 - 如果有任何一个是展开的，就全部关闭；否则全部展开
+    const hasExpanded = Array.from(allDetailsDiv).some(div => div.style.display === 'block');
+    
+    if (hasExpanded) {
+        // 全部关闭
+        allDetailsDiv.forEach(div => {
+            div.style.display = 'none';
+        });
+        allToggleButtons.forEach(btn => {
+            const btnIcon = btn.querySelector('i');
+            if (btnIcon) {
+                btnIcon.className = 'bi bi-chevron-down';
+            }
+        });
+        
+        // 清空单个服务器展开状态
+        expandedServers.clear();
+        
+        // 更新一键按钮状态
+        icon.className = 'bi bi-chevron-down';
+        buttonText.textContent = '\n                                一键展开\n                            ';
+    } else {
+        // 全部展开
+        allDetailsDiv.forEach((div, index) => {
+            div.style.display = 'block';
+            // 获取服务器ID
+            const serverId = div.id.replace('server-details-', '');
+            // 添加到展开集合
+            expandedServers.add(serverId);
+            // 加载磁盘详情
+            loadServerDiskDetails(serverId);
+        });
+        allToggleButtons.forEach(btn => {
+            const btnIcon = btn.querySelector('i');
+            if (btnIcon) {
+                btnIcon.className = 'bi bi-chevron-up';
+            }
+        });
+        
+        // 更新一键按钮状态
+        icon.className = 'bi bi-chevron-up';
+        buttonText.textContent = '\n                                一键关闭\n                            ';
+    }
+    
+    // 保存服务器展开状态
+    serversExpanded = !hasExpanded;
+}
+
+// 一键展开/关闭告警概览
+function toggleAllAlerts() {
+    const toggleButton = document.getElementById('toggleAllAlerts');
+    const icon = toggleButton.querySelector('i');
+    const buttonText = toggleButton.childNodes[2]; // 获取按钮文本节点
+    const alertsOverview = document.getElementById('alertsOverview');
+    
+    if (!alertsOverview) {
+        return;
+    }
+    
+    if (alertsExpanded) {
+        // 关闭告警概览
+        alertsOverview.style.display = 'none';
+        icon.className = 'bi bi-chevron-down';
+        buttonText.textContent = '\n                                                一键展开\n                                            ';
+        alertsExpanded = false;
+    } else {
+        // 展开告警概览
+        alertsOverview.style.display = 'block';
+        icon.className = 'bi bi-chevron-up';
+        buttonText.textContent = '\n                                                一键关闭\n                                            ';
+        alertsExpanded = true;
+    }
 }
 
 // 从仪表盘监控单个服务器
@@ -2292,7 +2620,7 @@ function renderLogsTable(logs) {
     if (!logs || logs.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="10" class="text-center text-muted">
+                <td colspan="11" class="text-center text-muted">
                     <i class="bi bi-inbox"></i>
                     暂无日志数据
                 </td>
@@ -2305,6 +2633,13 @@ function renderLogsTable(logs) {
     logs.forEach(log => {
         const statusClass = log.status === 'success' ? 'success' : 
                            log.status === 'warning' ? 'warning' : 'danger';
+        
+        // 计算磁盘最大使用率
+        let maxDiskUsage = 'N/A';
+        if (log.disk_info && Array.isArray(log.disk_info) && log.disk_info.length > 0) {
+            const diskUsages = log.disk_info.map(disk => parseFloat(disk.use_percent) || 0);
+            maxDiskUsage = Math.max(...diskUsages).toFixed(1) + '%';
+        }
         
         html += `
             <tr>
@@ -2319,6 +2654,7 @@ function renderLogsTable(logs) {
                 </td>
                 <td>${log.cpu_usage !== null && log.cpu_usage !== undefined ? log.cpu_usage.toFixed(1) + '%' : 'N/A'}</td>
                 <td>${log.memory_usage !== null && log.memory_usage !== undefined ? log.memory_usage.toFixed(1) + '%' : 'N/A'}</td>
+                <td>${maxDiskUsage}</td>
                 <td>${log.alert_info ? log.alert_info.length : 0}</td>
                 <td>${log.execution_time ? log.execution_time.toFixed(2) + 's' : 'N/A'}</td>
                 <td>
@@ -5076,4 +5412,72 @@ function bulkDeleteReports() {
             deleteBtn.disabled = false;
         });
     }
+}
+
+// 删除所有监控日志
+function deleteAllLogs() {
+    if (!confirm('确定要删除所有监控日志吗？此操作不可撤销，将清空所有历史监控记录。')) {
+        return;
+    }
+    
+    const btn = document.getElementById('logsDeleteAllBtn');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 删除中...';
+    btn.disabled = true;
+    
+    safeFetch('/api/logs/delete-all', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`成功删除所有监控日志，共删除 ${data.deleted_count} 条记录`, 'success');
+            clearLogsSelection();
+            loadLogs(1, currentLogsFilters);
+        } else {
+            showAlert('删除所有日志失败: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('删除所有日志失败:', error);
+        showAlert('删除所有日志失败', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    });
+}
+
+// 删除所有监控报告
+function deleteAllReports() {
+    if (!confirm('确定要删除所有监控报告吗？此操作不可撤销，将清空所有历史报告文件。')) {
+        return;
+    }
+    
+    const btn = document.getElementById('reportsDeleteAllBtn');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 删除中...';
+    btn.disabled = true;
+    
+    safeFetch('/api/reports/delete-all', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`成功删除所有监控报告，共删除 ${data.deleted_count} 个报告`, 'success');
+            clearReportsSelection();
+            loadReports(1, currentReportsFilters);
+        } else {
+            showAlert('删除所有报告失败: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('删除所有报告失败:', error);
+        showAlert('删除所有报告失败', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+    });
 }

@@ -494,11 +494,18 @@ class HostMonitor:
                 
                 status_dict = {}
                 for log in latest_logs:
+                    disk_info = log.get_disk_info()
+                    # 计算磁盘最大使用率
+                    max_disk_usage = 0.0
+                    if disk_info:
+                        max_disk_usage = max([disk.get('use_percent', 0.0) for disk in disk_info])
+                    
                     status_dict[log.server_id] = {
                         'status': log.status,
                         'cpu_usage': log.cpu_usage,
                         'memory_usage': log.memory_usage,
-                        'disk_info': log.get_disk_info(),
+                        'disk_info': disk_info,
+                        'max_disk_usage': max_disk_usage,  # 添加磁盘最大使用率
                         'alert_count': len(log.get_alert_info()),
                         'monitor_time': log.monitor_time.isoformat() if log.monitor_time else None,
                         'execution_time': log.execution_time

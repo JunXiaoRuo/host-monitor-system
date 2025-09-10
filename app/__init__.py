@@ -263,10 +263,40 @@ def create_app(config_object='config.Config'):
                 else:
                     failed_count += 1
             
-            # 补充服务器名称
-            server_dict = {s.id: s.name for s in servers}
+            # 补充服务器名称和IP
+            server_dict = {s.id: {'name': s.name, 'host': s.host} for s in servers}
             for server_id, status in server_status.items():
-                status['server_name'] = server_dict.get(server_id, f'服务器{server_id}')
+                server_info = server_dict.get(server_id, {'name': f'服务器{server_id}', 'host': '未知'})
+                status['server_name'] = server_info['name']
+                status['server_ip'] = server_info['host']
+            
+            # 生成告警概览数据
+            alerts_overview = []
+            for server_id, status in server_status.items():
+                if status['status'] in ['warning', 'failed']:
+                    # 获取最新的监控日志以获取详细告警信息
+                    latest_log = MonitorLog.query.filter_by(server_id=server_id).order_by(MonitorLog.monitor_time.desc()).first()
+                    if latest_log:
+                        alert_details = []
+                        alert_info = latest_log.get_alert_info()
+                        
+                        for alert in alert_info:
+                            if alert['type'] == 'cpu':
+                                alert_details.append(f"CPU告警: CPU使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%)")
+                            elif alert['type'] == 'memory':
+                                alert_details.append(f"内存告警: 内存使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%)")
+                            elif alert['type'] == 'disk':
+                                alert_details.append(f"磁盘告警: 磁盘 {alert['mounted_on']} 使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%)")
+                        
+                        if alert_details or status['status'] == 'failed':
+                            alerts_overview.append({
+                                'server_id': server_id,
+                                'server_name': status['server_name'],
+                                'server_ip': status['server_ip'],
+                                'status': status['status'],
+                                'alert_details': alert_details if alert_details else ['服务器连接失败'] if status['status'] == 'failed' else [],
+                                'monitor_time': status['monitor_time']
+                            })
             
             # 获取服务总览数据
             services_overview = service_monitor_service.get_services_overview()
@@ -279,6 +309,7 @@ def create_app(config_object='config.Config'):
                     'warning_count': warning_count,
                     'failed_count': failed_count,
                     'server_status': server_status,
+                    'alerts_overview': alerts_overview,  # 添加告警概览
                     'services_overview': services_overview
                 }
             })
@@ -286,6 +317,45 @@ def create_app(config_object='config.Config'):
         except Exception as e:
             logger.error(f"获取仪表板数据失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/server/<int:server_id>/disk-details')
+    @login_required
+    def get_server_disk_details(server_id):
+        """获取服务器磁盘详情"""
+        try:
+            # 获取服务器信息
+            server = Server.query.get_or_404(server_id)
+            
+            # 获取最新的监控日志
+            latest_log = MonitorLog.query.filter_by(server_id=server_id).order_by(MonitorLog.monitor_time.desc()).first()
+            
+            if not latest_log or not latest_log.disk_info:
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'server_name': server.name,
+                        'disk_info': []
+                    }
+                })
+            
+            try:
+                disk_data = json.loads(latest_log.disk_info)
+                if not isinstance(disk_data, list):
+                    disk_data = []
+            except (json.JSONDecodeError, ValueError):
+                disk_data = []
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'server_name': server.name,
+                    'disk_info': disk_data,
+                    'monitor_time': latest_log.monitor_time.isoformat() if latest_log.monitor_time else None
+                }
+            })
+        except Exception as e:
+            logger.error(f"获取服务器磁盘详情失败: {str(e)}")
+            return jsonify({'success': False, 'message': '获取磁盘详情失败'}), 500
     
     @app.route('/api/servers/with-services', methods=['GET'])
     @login_required
@@ -1004,6 +1074,34 @@ def create_app(config_object='config.Config'):
             logger.error(f"批量删除监控日志失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
+    @app.route('/api/logs/delete-all', methods=['POST'])
+    @login_required
+    def delete_all_logs():
+        """一键删除所有监控日志"""
+        try:
+            # 获取所有监控日志的数量
+            total_count = MonitorLog.query.count()
+            
+            if total_count == 0:
+                return jsonify({'success': False, 'message': '没有监控日志可删除'})
+            
+            # 删除所有监控日志
+            MonitorLog.query.delete()
+            db.session.commit()
+            
+            logger.info(f"一键删除所有监控日志成功，删除数量: {total_count}")
+            
+            return jsonify({
+                'success': True, 
+                'message': f'成功删除所有 {total_count} 条监控日志',
+                'deleted_count': total_count
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"一键删除所有监控日志失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
     @app.route('/api/reports', methods=['GET'])
     @login_required
     def get_reports():
@@ -1158,6 +1256,49 @@ def create_app(config_object='config.Config'):
         except Exception as e:
             db.session.rollback()
             logger.error(f"批量删除报告失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
+    
+    @app.route('/api/reports/delete-all', methods=['POST'])
+    @login_required
+    def delete_all_reports():
+        """一键删除所有监控报告"""
+        try:
+            # 获取所有监控报告
+            reports = MonitorReport.query.all()
+            
+            if not reports:
+                return jsonify({'success': False, 'message': '没有监控报告可删除'})
+            
+            total_count = len(reports)
+            deleted_files = []
+            
+            # 删除所有报告文件和数据库记录
+            for report in reports:
+                # 删除文件
+                if os.path.exists(report.report_path):
+                    try:
+                        os.remove(report.report_path)
+                        deleted_files.append(report.report_path)
+                        logger.info(f"删除报告文件: {report.report_path}")
+                    except Exception as file_error:
+                        logger.warning(f"删除报告文件失败: {report.report_path}, 错误: {str(file_error)}")
+            
+            # 删除所有数据库记录
+            MonitorReport.query.delete()
+            db.session.commit()
+            
+            logger.info(f"一键删除所有监控报告成功，删除数量: {total_count}, 删除文件: {len(deleted_files)}个")
+            
+            return jsonify({
+                'success': True, 
+                'message': f'成功删除所有 {total_count} 个监控报告',
+                'deleted_count': total_count,
+                'deleted_files_count': len(deleted_files)
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"一键删除所有监控报告失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
     
     @app.route('/api/reports/generate', methods=['POST'])
