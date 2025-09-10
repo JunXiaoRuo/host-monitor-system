@@ -3997,20 +3997,25 @@ function updateServicesOverview(servicesData) {
     
     if (!container) {
         // 如果容器不存在，在服务器状态下方创建
-        const serverStatusContainer = document.getElementById('serverStatusList').parentElement;
+        // 找到服务器状态列表所在的row容器
+        const serverStatusRow = document.getElementById('serverStatusList').closest('.row');
         const servicesOverviewHtml = `
-            <div class="card dashboard-card mt-3" id="servicesOverview">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="bi bi-gear me-2"></i>服务总览
-                    </h5>
-                </div>
-                <div class="card-body" id="servicesOverviewContent">
-                    <!-- 服务总览内容将由JavaScript填充 -->
+            <div class="row mb-4">
+                <div class="col-md-12">
+                    <div class="card dashboard-card" id="servicesOverview">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="bi bi-gear me-2"></i>服务总览
+                            </h5>
+                        </div>
+                        <div class="card-body" id="servicesOverviewContent">
+                            <!-- 服务总览内容将由JavaScript填充 -->
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
-        serverStatusContainer.insertAdjacentHTML('afterend', servicesOverviewHtml);
+        serverStatusRow.insertAdjacentHTML('beforebegin', servicesOverviewHtml);
     }
     
     const content = document.getElementById('servicesOverviewContent');
