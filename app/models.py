@@ -285,6 +285,8 @@ class ServiceConfig(db.Model):
     process_name = db.Column(db.String(100), nullable=False, comment='进程名称')
     is_monitoring = db.Column(db.Boolean, default=True, comment='是否监控')
     description = db.Column(db.Text, comment='服务描述')
+    start_command = db.Column(db.Text, comment='启动命令')
+    auto_restart = db.Column(db.Boolean, default=False, comment='是否自动重启')
     last_monitor_time = db.Column(db.DateTime, comment='最新监控时间')
     first_error_time = db.Column(db.DateTime, comment='首次异常时间')
     created_at = db.Column(db.DateTime, default=get_local_time)
@@ -302,6 +304,8 @@ class ServiceConfig(db.Model):
             'process_name': self.process_name,
             'is_monitoring': self.is_monitoring,
             'description': self.description,
+            'start_command': self.start_command,
+            'auto_restart': self.auto_restart,
             'last_monitor_time': self.last_monitor_time.isoformat() if self.last_monitor_time else None,
             'first_error_time': self.first_error_time.isoformat() if self.first_error_time else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,

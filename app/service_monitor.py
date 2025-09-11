@@ -87,6 +87,8 @@ class ServiceMonitorService:
                 service_name=data['service_name'],
                 process_name=data['process_name'],
                 is_monitoring=data.get('is_monitoring', True),
+                start_command=data.get('start_command', ''),
+                auto_restart=data.get('auto_restart', False),
                 description=data.get('description', '')
             )
             
@@ -133,6 +135,10 @@ class ServiceMonitorService:
                 service_config.process_name = data['process_name']
             if 'is_monitoring' in data:
                 service_config.is_monitoring = data['is_monitoring']
+            if 'start_command' in data:
+                service_config.start_command = data['start_command']
+            if 'auto_restart' in data:
+                service_config.auto_restart = data['auto_restart']
             if 'description' in data:
                 service_config.description = data['description']
             
@@ -514,10 +520,52 @@ class ServiceMonitorService:
             
             if len(processes) > 0:
                 result['status'] = 'running'
+                # 根据实际配置显示自启动状态
+                if service_config.auto_restart:
+                    result['auto_restart_status'] = '已开启'
+                else:
+                    result['auto_restart_status'] = '未开启'
                 logger.info(f"服务 {service_config.service_name} 状态: 运行中")
             else:
                 result['status'] = 'stopped'
                 logger.warning(f"服务 {service_config.service_name} 状态: 已停止 - 未找到匹配的进程")
+                
+                # 检查是否需要自动重启
+                if service_config.auto_restart and service_config.start_command:
+                    logger.info(f"服务 {service_config.service_name} 开启了自动重启，尝试执行启动命令")
+                    restart_result = self._execute_restart_command(ssh_client, service_config)
+                    result['restart_attempted'] = True
+                    result['restart_success'] = restart_result['success']
+                    result['restart_message'] = restart_result['message']
+                    
+                    if restart_result['success']:
+                        # 等待3秒后重新检测
+                        logger.info(f"启动命令执行成功，等待3秒后重新检测服务状态")
+                        time.sleep(3)
+                        
+                        # 重新检测服务状态
+                        recheck_result = self._check_service_status(ssh_client, service_config)
+                        if recheck_result['success'] and recheck_result['process_count'] > 0:
+                            result['status'] = 'running'
+                            result['process_count'] = recheck_result['process_count']
+                            result['process_info'] = recheck_result['process_info']
+                            result['auto_restart_status'] = '自启动成功'
+                            logger.info(f"服务 {service_config.service_name} 重启成功，当前状态: 运行中")
+                        else:
+                            result['auto_restart_status'] = '自启动失败'
+                            logger.warning(f"服务 {service_config.service_name} 重启后仍未运行")
+                    else:
+                        # 重启命令执行失败（包括超时）
+                        result['auto_restart_status'] = '自启动失败'
+                        logger.warning(f"服务 {service_config.service_name} 重启命令执行失败: {restart_result['message']}")
+                else:
+                    result['restart_attempted'] = False
+                    if not service_config.auto_restart:
+                        result['auto_restart_status'] = '未开启'
+                        logger.info(f"服务 {service_config.service_name} 未开启自动重启")
+                    elif not service_config.start_command:
+                        result['auto_restart_status'] = '未开启'
+                        logger.warning(f"服务 {service_config.service_name} 开启了自动重启但未配置启动命令")
             
             logger.debug(f"监控服务 {service_config.service_name}: {result['status']}, 进程数: {len(processes)}")
             
@@ -527,6 +575,110 @@ class ServiceMonitorService:
             logger.error(f"监控服务 {service_config.service_name} 失败: {str(e)}")
         
         return result
+    
+    def _execute_restart_command(self, ssh_client, service_config: ServiceConfig) -> Dict[str, Any]:
+        """
+        执行服务重启命令
+        
+        Args:
+            ssh_client: SSH客户端
+            service_config: 服务配置
+            
+        Returns:
+            执行结果
+        """
+        try:
+            logger.info(f"执行重启命令: {service_config.start_command}")
+            # 确保命令在后台运行且非交互式执行
+            start_cmd = service_config.start_command.strip()
+            # 如果命令已经包含&，则移除它，避免重复
+            if start_cmd.endswith('&'):
+                start_cmd = start_cmd[:-1].strip()
+            # 使用sh -c来避免重定向解析问题
+            background_command = f"sh -c 'nohup {start_cmd} >/dev/null 2>&1 &'"
+            logger.info(f"实际执行的后台命令: {background_command}")
+            cmd_result = self.ssh_manager.execute_command(ssh_client, background_command, timeout=30)
+            
+            if cmd_result['success']:
+                logger.info(f"重启命令执行成功，耗时: {cmd_result['execution_time']:.2f}秒")
+                return {
+                    'success': True,
+                    'message': '启动命令执行成功',
+                    'output': cmd_result['stdout'],
+                    'execution_time': cmd_result['execution_time']
+                }
+            else:
+                error_msg = cmd_result['stderr'] or f"命令执行失败，退出码: {cmd_result['exit_code']}"
+                logger.error(f"重启命令执行失败: {error_msg}")
+                return {
+                    'success': False,
+                    'message': f'启动命令执行失败: {error_msg}',
+                    'output': cmd_result['stdout'],
+                    'error': cmd_result['stderr']
+                }
+        except Exception as e:
+            logger.error(f"执行重启命令异常: {str(e)}")
+            return {
+                'success': False,
+                'message': f'执行重启命令异常: {str(e)}',
+                'error': str(e)
+            }
+    
+    def _check_service_status(self, ssh_client, service_config: ServiceConfig) -> Dict[str, Any]:
+        """
+        检查服务状态（用于重启后的二次检测）
+        
+        Args:
+            ssh_client: SSH客户端
+            service_config: 服务配置
+            
+        Returns:
+            检测结果
+        """
+        try:
+            cmd = f"/bin/sh -c \"ps aux | grep '{service_config.process_name}' | grep -v grep\""
+            cmd_result = self.ssh_manager.execute_command(ssh_client, cmd)
+            
+            # 对于grep命令，退出码1表示没有找到匹配项
+            if not cmd_result['success'] and cmd_result['exit_code'] != 1:
+                return {
+                    'success': False,
+                    'message': f"状态检测失败: {cmd_result['stderr']}",
+                    'process_count': 0,
+                    'process_info': []
+                }
+            
+            output = cmd_result['stdout'].strip()
+            processes = []
+            
+            if output:
+                lines = output.split('\n')
+                for line in lines:
+                    if line.strip():
+                        parts = line.split(None, 10)
+                        if len(parts) >= 11:
+                            process_info = {
+                                'pid': parts[1],
+                                'cpu': parts[2],
+                                'memory': parts[3],
+                                'command': parts[10]
+                            }
+                            processes.append(process_info)
+            
+            return {
+                'success': True,
+                'process_count': len(processes),
+                'process_info': processes
+            }
+            
+        except Exception as e:
+            logger.error(f"检查服务状态异常: {str(e)}")
+            return {
+                'success': False,
+                'message': f'检查服务状态异常: {str(e)}',
+                'process_count': 0,
+                'process_info': []
+            }
     
     def _save_service_monitor_result(self, result: Dict[str, Any]) -> Optional[ServiceMonitorLog]:
         """
@@ -589,6 +741,7 @@ class ServiceMonitorService:
             error_services = 0
             server_results = []
             service_alerts = []
+            restart_success_alerts = []  # 收集重启成功的服务
             
             for server in servers:
                 server_result = self.monitor_server_services(server.id)
@@ -601,6 +754,15 @@ class ServiceMonitorService:
                         
                         if service_result['status'] == 'running':
                             normal_services += 1
+                            # 检查是否是重启成功的服务
+                            if service_result.get('restart_attempted') and service_result.get('restart_success'):
+                                restart_success_alerts.append({
+                                    'server_name': service_result['server_name'],
+                                    'server_ip': server.host,
+                                    'service_name': service_result['service_name'],
+                                    'status': 'restart_success',
+                                    'auto_restart_status': service_result.get('auto_restart_status', '重启成功')
+                                })
                         else:
                             error_services += 1
                             # 收集异常服务信息用于通知
@@ -609,7 +771,8 @@ class ServiceMonitorService:
                                 'server_ip': server.host,  # 添加服务器IP
                                 'service_name': service_result['service_name'],
                                 'status': service_result['status'],
-                                'error_message': service_result.get('error_message', '')
+                                'error_message': service_result.get('error_message', ''),
+                                'auto_restart_status': service_result.get('auto_restart_status', '未开启')
                             })
                 else:
                     # SSH连接失败，统计该服务器上的所有服务为异常
@@ -630,9 +793,9 @@ class ServiceMonitorService:
                             'error_message': server_result.get('message', 'SSH连接失败')
                         })
             
-            # 发送服务监控通知（如果有异常）
-            if service_alerts:
-                self._send_service_alerts(service_alerts, total_services, normal_services, error_services)
+            # 发送服务监控通知（如果有异常或重启成功）
+            if service_alerts or restart_success_alerts:
+                self._send_service_alerts(service_alerts, total_services, normal_services, error_services, restart_success_alerts)
             
             summary = {
                 'total_services': total_services,
@@ -650,7 +813,7 @@ class ServiceMonitorService:
             logger.error(f"监控所有服务失败: {str(e)}")
             return {'error': str(e)}
     
-    def _send_service_alerts(self, alerts: List[Dict], total: int, normal: int, error: int):
+    def _send_service_alerts(self, alerts: List[Dict], total: int, normal: int, error: int, restart_success_alerts: List[Dict] = None):
         """
         发送服务监控告警通知
         
@@ -659,13 +822,24 @@ class ServiceMonitorService:
             total: 总服务数
             normal: 正常服务数
             error: 异常服务数
+            restart_success_alerts: 重启成功服务列表
         """
         try:
             # 构建通知内容
             monitor_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            content = f"服务监控告警\n时间: {monitor_time}\n"
+            
+            # 根据情况确定通知标题
+            if alerts and restart_success_alerts:
+                title = "服务监控告警"
+            elif alerts:
+                title = "服务监控告警"
+            else:
+                title = "服务重启通知"
+            
+            content = f"{title}\n时间: {monitor_time}\n"
             content += f"总服务数: {total}, 正常: {normal}, 异常: {error}\n"
             
+            # 处理异常服务
             if alerts:
                 content += "\n异常服务详情:\n"
                 for alert in alerts:  # 显示所有异常服务
@@ -675,12 +849,28 @@ class ServiceMonitorService:
                         status_text = "连接失败"
                     else:
                         status_text = "监控失败"
+                    
+                    # 获取自启动状态
+                    auto_restart_status = "未开启"
+                    if alert.get('auto_restart_status'):
+                        auto_restart_status = alert['auto_restart_status']
+                    
                     # 添加IP地址信息
                     server_info = f"{alert['server_name']}({alert.get('server_ip', 'N/A')})"
-                    content += f"- {server_info} | {alert['service_name']} | {status_text}\n"
+                    content += f"- {server_info} | {alert['service_name']} | {status_text} | {auto_restart_status}\n"
                     # 如果有错误信息，也显示出来
                     if alert.get('error_message'):
                         content += f"  错误: {alert['error_message']}\n"
+            
+            # 处理重启成功的服务
+            if restart_success_alerts:
+                if alerts:
+                    content += "\n重启成功服务详情:\n"
+                else:
+                    content += "\n服务重启详情:\n"
+                for alert in restart_success_alerts:
+                    server_info = f"{alert['server_name']}({alert.get('server_ip', 'N/A')})"
+                    content += f"- {server_info} | {alert['service_name']} | 已停止 | 重启成功\n"
             
             content += "\n更多内容可查看服务配置页面！"
             

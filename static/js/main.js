@@ -4499,6 +4499,22 @@ function showServiceConfigModal(serviceId = null, serverId = null, serviceData =
                             </div>
                             
                             <div class="mb-3">
+                                <label for="configStartCommand" class="form-label">启动命令</label>
+                                <input type="text" class="form-control" id="configStartCommand" placeholder="例如: systemctl start nginx">
+                                <div class="form-text">服务异常时执行的启动命令（可选）</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="configAutoRestart">
+                                    <label class="form-check-label" for="configAutoRestart">
+                                        启用自动重启
+                                    </label>
+                                    <div class="form-text">当服务异常时自动执行启动命令</div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
                                 <label for="configServiceDescription" class="form-label">服务描述</label>
                                 <textarea class="form-control" id="configServiceDescription" rows="3"></textarea>
                             </div>
@@ -4541,6 +4557,8 @@ function fillServiceConfigFormData(service) {
     const serviceNameEl = document.getElementById('configServiceName');
     const processNameEl = document.getElementById('configProcessName');
     const isMonitoringEl = document.getElementById('configIsMonitoring');
+    const startCommandEl = document.getElementById('configStartCommand');
+    const autoRestartEl = document.getElementById('configAutoRestart');
     const serviceDescriptionEl = document.getElementById('configServiceDescription');
     
     if (serviceNameEl) {
@@ -4555,6 +4573,14 @@ function fillServiceConfigFormData(service) {
         isMonitoringEl.checked = service.is_monitoring || false;
     }
     
+    if (startCommandEl) {
+        startCommandEl.value = service.start_command || '';
+    }
+    
+    if (autoRestartEl) {
+        autoRestartEl.checked = service.auto_restart || false;
+    }
+    
     if (serviceDescriptionEl) {
         serviceDescriptionEl.value = service.description || '';
     }
@@ -4567,6 +4593,8 @@ function saveServiceFromConfig() {
     const serviceName = document.getElementById('configServiceName').value.trim();
     const processName = document.getElementById('configProcessName').value.trim();
     const isMonitoring = document.getElementById('configIsMonitoring').checked;
+    const startCommand = document.getElementById('configStartCommand').value.trim();
+    const autoRestart = document.getElementById('configAutoRestart').checked;
     const description = document.getElementById('configServiceDescription').value.trim();
     
     if (!serverId) {
@@ -4584,6 +4612,8 @@ function saveServiceFromConfig() {
         service_name: serviceName,
         process_name: processName,
         is_monitoring: isMonitoring,
+        start_command: startCommand,
+        auto_restart: autoRestart,
         description: description
     };
     
