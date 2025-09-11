@@ -17,6 +17,8 @@ let currentLogsPage = 1;
 let currentLogsFilters = {};
 let currentReportsPage = 1;
 let currentReportsFilters = {};
+let currentServersPage = 1;
+let currentServersFilters = {};
 
 // 全局fetch包装器，处理401未授权错误
 function safeFetch(url, options = {}) {
@@ -321,7 +323,7 @@ function showSection(sectionName) {
     
     switch(sectionName) {
         case 'dashboard': refreshDashboard(); break;
-        case 'servers': loadServers(); break;
+        case 'servers': loadServers(1, {}); break; // 使用新的分页API
         case 'schedules': loadSchedules(); break;
         case 'services': loadServices(); break;
         case 'thresholds': loadThresholds(); break;
@@ -867,14 +869,34 @@ function showAlert(message, type) {
 }
 
 // 加载服务器列表
-function loadServers() {
+function loadServers(page = 1, filters = {}) {
+    // 更新当前分页状态
+    currentServersPage = page;
+    currentServersFilters = filters;
+    
+    // 构建查询参数
+    const params = new URLSearchParams({
+        page: page,
+        per_page: 20,
+        ...filters
+    });
+    
     // 使用包含服务统计的API
-    safeFetch('/api/servers/with-services')
+    safeFetch(`/api/servers/with-services?${params}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 serversData = data.data.servers;
                 renderServersTable(serversData);
+                // 构建分页信息对象
+                const paginationInfo = {
+                    page: data.data.current_page,
+                    pages: data.data.pages,
+                    total: data.data.total,
+                    has_prev: data.data.has_prev,
+                    has_next: data.data.has_next
+                };
+                renderServersPagination(paginationInfo);
             } else {
                 showAlert('加载服务器列表失败: ' + data.message, 'danger');
             }
@@ -3142,6 +3164,85 @@ function renderReportsPagination(pagination) {
     if (info) {
         const start = (pagination.page - 1) * pagination.per_page + 1;
         const end = Math.min(pagination.page * pagination.per_page, pagination.total);
+        info.textContent = `显示 ${start}-${end} 条，共 ${pagination.total} 条记录`;
+    }
+}
+
+// 渲染服务器分页控件
+function renderServersPagination(pagination) {
+    const container = document.getElementById('serversPagination');
+    if (!container || !pagination) return;
+    
+    let html = '';
+    
+    // 上一页
+    if (pagination.has_prev) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadServers(${pagination.page - 1}, currentServersFilters)">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </li>`;
+    } else {
+        html += `<li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+        </li>`;
+    }
+    
+    // 页码
+    const startPage = Math.max(1, pagination.page - 2);
+    const endPage = Math.min(pagination.pages, pagination.page + 2);
+    
+    if (startPage > 1) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadServers(1, currentServersFilters)">1</a>
+        </li>`;
+        if (startPage > 2) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        if (i === pagination.page) {
+            html += `<li class="page-item active">
+                <span class="page-link">${i}</span>
+            </li>`;
+        } else {
+            html += `<li class="page-item">
+                <a class="page-link" href="#" onclick="loadServers(${i}, currentServersFilters)">${i}</a>
+            </li>`;
+        }
+    }
+    
+    if (endPage < pagination.pages) {
+        if (endPage < pagination.pages - 1) {
+            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadServers(${pagination.pages}, currentServersFilters)">${pagination.pages}</a>
+        </li>`;
+    }
+    
+    // 下一页
+    if (pagination.has_next) {
+        html += `<li class="page-item">
+            <a class="page-link" href="#" onclick="loadServers(${pagination.page + 1}, currentServersFilters)">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>`;
+    } else {
+        html += `<li class="page-item disabled">
+            <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+        </li>`;
+    }
+    
+    container.innerHTML = html;
+    
+    // 更新分页信息
+    const info = document.getElementById('serversPageInfo');
+    if (info) {
+        const per_page = 20; // 每页固定20条
+        const start = (pagination.page - 1) * per_page + 1;
+        const end = Math.min(pagination.page * per_page, pagination.total);
         info.textContent = `显示 ${start}-${end} 条，共 ${pagination.total} 条记录`;
     }
 }
