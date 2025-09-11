@@ -432,11 +432,14 @@ class ServiceMonitorService:
             # 使用SSH管理器的execute_command方法，获得重试机制和更好的错误处理
             cmd_result = self.ssh_manager.execute_command(ssh_client, cmd)
             
-            if not cmd_result['success']:
+            # 对于grep命令，退出码1表示没有找到匹配项，这是正常情况
+            if not cmd_result['success'] and cmd_result['exit_code'] != 1:
                 result['status'] = 'error'
                 result['error_message'] = cmd_result['stderr'] or f"命令执行失败，退出码: {cmd_result['exit_code']}"
                 logger.error(f"SSH命令执行失败: {result['error_message']}")
                 return result
+            elif cmd_result['exit_code'] == 1:
+                logger.info(f"grep命令未找到匹配进程（退出码1），这是正常情况")
             
             # 获取命令输出
             output = cmd_result['stdout'].strip()
@@ -467,14 +470,16 @@ class ServiceMonitorService:
                         logger.warning(f"检测到非关键shell错误（已忽略）: {error}")
                         break
                 
-                # 如果是关键错误，或者既有错误又没有有效输出，则报错
-                if is_critical_error or not output:
+                # 如果是关键错误，则报错
+                if is_critical_error:
                     result['status'] = 'error'
                     result['error_message'] = error
                     logger.error(f"SSH命令执行出错: {error}")
                     return result
                 else:
-                    logger.info(f"忽略非关键错误，继续处理有效输出")
+                    logger.info(f"忽略非关键错误，继续处理输出（可能为空）")
+                    # 清除错误信息，避免后续处理中误判
+                    error = None
             
             logger.info(f"命令输出为空: {not output}，输出长度: {len(output) if output else 0}")
             logger.info(f"输出内容: {repr(output)}")

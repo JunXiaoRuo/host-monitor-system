@@ -302,7 +302,6 @@ python reset_password.py admin newpassword123
 ├── run.py                       # 开发环境启动脚本
 ├── start_production.py         # 生产环境启动脚本
 ├── reset_password.py           # 管理员密码重置工具
-├── app_simple.py               # 简化版应用启动器
 ├── start.bat                   # Windows启动脚本
 ├── start.sh                    # Linux/Mac启动脚本
 ├── README.md                   # 项目说明文档
@@ -341,7 +340,6 @@ python reset_password.py admin newpassword123
 **启动脚本**:
 - **`run.py`**: 开发环境启动脚本，支持从.env读取配置
 - **`start_production.py`**: 生产环境启动脚本，支持后台运行
-- **`app_simple.py`**: 简化版启动器，用于测试和调试
 - **`start.bat`**: Windows启动脚本，支持交互式选择运行模式
 - **`start.sh`**: Linux/Mac启动脚本，支持交互式选择运行模式
 
