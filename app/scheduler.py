@@ -167,7 +167,7 @@ class SchedulerService:
             
             # 配置执行器
             executors = {
-                'default': ThreadPoolExecutor(20),
+                'default': ThreadPoolExecutor(8),
             }
             
             # 作业默认设置

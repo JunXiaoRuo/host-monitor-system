@@ -62,25 +62,42 @@ for logger_name in silent_loggers:
     # 确保没有处理器
     silent_logger.handlers.clear()
 
-logger.info(f"项目根目录: {basedir}")
-logger.info(f"当前工作目录: {os.getcwd()}")
-logger.info(f"切换后工作目录: {os.getcwd()}")
+
+logger.error(f"[STARTUP] 项目根目录: {basedir}")
+logger.error(f"[STARTUP] 当前工作目录: {os.getcwd()}")
+logger.error(f"[STARTUP] 切换后工作目录: {os.getcwd()}")
 
 try:
     from app import create_app
-    logger.info("✓ 模块导入成功")
+    logger.error("[STARTUP] ✓ 模块导入成功")
     
     app = create_app()
-    logger.info("✓ Flask应用创建成功")
-    logger.info(f"✓ 模板目录: {app.template_folder}")
-    logger.info(f"✓ 静态文件目录: {app.static_folder}")
+    logger.error("[STARTUP] ✓ Flask应用创建成功")
+    logger.error(f"[STARTUP] ✓ 模板目录: {app.template_folder}")
+    logger.error(f"[STARTUP] ✓ 静态文件目录: {app.static_folder}")
+    
+    # Flask应用创建后，再次确保所有日志器都不输出到控制台
+    all_loggers = [logging.getLogger(name) for name in logging.Logger.manager.loggerDict]
+    all_loggers.append(logging.getLogger())  # 添加根日志器
+    
+    for logger_obj in all_loggers:
+        # 移除所有控制台处理器
+        for handler in logger_obj.handlers[:]:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                logger_obj.removeHandler(handler)
+        # 如果不是根日志器且级别低于ERROR，提升到ERROR
+        if logger_obj.name and logger_obj.level < logging.ERROR:
+            logger_obj.setLevel(logging.ERROR)
+        # 禁止传播到父日志器
+        if logger_obj.name:  # 不设置根日志器的propagate
+            logger_obj.propagate = False
     
     # 检查模板文件是否存在
     template_path = os.path.join(app.template_folder, 'index.html')
     if os.path.exists(template_path):
-        logger.info(f"✓ 模板文件存在: {template_path}")
+        logger.error(f"[STARTUP] ✓ 模板文件存在: {template_path}")
     else:
-        logger.error(f"✗ 模板文件不存在: {template_path}")
+        logger.error(f"[STARTUP] ✗ 模板文件不存在: {template_path}")
         
 except Exception as e:
     logger.error(f"✗ 初始化失败: {str(e)}")
@@ -104,8 +121,8 @@ if __name__ == '__main__':
     print("按 Ctrl+C 停止服务")
     print("="*50)
     
-    logger.info("初始化生产环境主机巡视系统")
-    logger.info(f"监听地址: {app.config.get('HOST', '0.0.0.0')}:{app.config.get('PORT', 5000)}")
+    logger.error("[STARTUP] 初始化生产环境主机巡视系统")
+    logger.error(f"[STARTUP] 监听地址: {app.config.get('HOST', '0.0.0.0')}:{app.config.get('PORT', 5000)}")
     
     try:
         # 生产环境运行，禁用调试和自动重载
