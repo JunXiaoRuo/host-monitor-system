@@ -16,8 +16,15 @@ logger = logging.getLogger(__name__)
 class HostMonitor:
     """主机巡视核心类"""
     
+    # 全局共享的SSH连接管理器
+    _shared_ssh_manager = None
+    
     def __init__(self):
-        self.ssh_manager = SSHConnectionManager()
+        # 使用全局共享的SSH连接管理器，确保连接池有效工作
+        if HostMonitor._shared_ssh_manager is None:
+            HostMonitor._shared_ssh_manager = SSHConnectionManager()
+            logger.info("创建全局SSH连接管理器，连接池已启用")
+        self.ssh_manager = HostMonitor._shared_ssh_manager
         self._server_service = None
         self._threshold_service = None
     

@@ -63,18 +63,24 @@ for logger_name in silent_loggers:
     silent_logger.handlers.clear()
 
 
-logger.error(f"[STARTUP] 项目根目录: {basedir}")
-logger.error(f"[STARTUP] 当前工作目录: {os.getcwd()}")
-logger.error(f"[STARTUP] 切换后工作目录: {os.getcwd()}")
+logger.info(f"[STARTUP] 项目根目录: {basedir}")
+print(f"[STARTUP] 项目根目录: {basedir}")
+logger.info(f"[STARTUP] 当前工作目录: {os.getcwd()}")
+print(f"[STARTUP] 当前工作目录: {os.getcwd()}")
+logger.info(f"[STARTUP] 切换后工作目录: {os.getcwd()}")
+print(f"[STARTUP] 切换后工作目录: {os.getcwd()}")
 
 try:
     from app import create_app
-    logger.error("[STARTUP] ✓ 模块导入成功")
-    
+    logger.info("[STARTUP] ✓ 模块导入成功")
+    print("[STARTUP] ✓ 模块导入成功")
     app = create_app()
-    logger.error("[STARTUP] ✓ Flask应用创建成功")
-    logger.error(f"[STARTUP] ✓ 模板目录: {app.template_folder}")
-    logger.error(f"[STARTUP] ✓ 静态文件目录: {app.static_folder}")
+    logger.info("[STARTUP] ✓ Flask应用创建成功")
+    print("[STARTUP] ✓ Flask应用创建成功")
+    logger.info(f"[STARTUP] ✓ 模板目录: {app.template_folder}")
+    print(f"[STARTUP] ✓ 模板目录: {app.template_folder}")
+    logger.info(f"[STARTUP] ✓ 静态文件目录: {app.static_folder}")
+    print(f"[STARTUP] ✓ 静态文件目录: {app.static_folder}")
     
     # Flask应用创建后，再次确保所有日志器都不输出到控制台
     all_loggers = [logging.getLogger(name) for name in logging.Logger.manager.loggerDict]
@@ -95,9 +101,11 @@ try:
     # 检查模板文件是否存在
     template_path = os.path.join(app.template_folder, 'index.html')
     if os.path.exists(template_path):
-        logger.error(f"[STARTUP] ✓ 模板文件存在: {template_path}")
+        logger.info(f"[STARTUP] ✓ 模板文件存在: {template_path}")
+        print(f"[STARTUP] ✓ 模板文件存在: {template_path}")
     else:
         logger.error(f"[STARTUP] ✗ 模板文件不存在: {template_path}")
+        print(f"[STARTUP] ✗ 模板文件不存在: {template_path}")
         
 except Exception as e:
     logger.error(f"✗ 初始化失败: {str(e)}")
@@ -117,12 +125,13 @@ if __name__ == '__main__':
     print("- 告警通知推送")
     print("="*50)
     print(f"请在浏览器中访问: http://{app.config.get('HOST', '0.0.0.0')}:{app.config.get('PORT', 5000)}")
-    print("生产环境模式: 控制台日志已禁用，日志保存在 logs/ 目录")
+    print("生产环境模式: INFO日志已禁用，仅显示error错误，日志保存在 logs/ 目录，如需详细日志请运行 python run.py")
     print("按 Ctrl+C 停止服务")
     print("="*50)
     
-    logger.error("[STARTUP] 初始化生产环境主机巡视系统")
-    logger.error(f"[STARTUP] 监听地址: {app.config.get('HOST', '0.0.0.0')}:{app.config.get('PORT', 5000)}")
+    logger.info("[STARTUP] 初始化生产环境主机巡视系统")
+    logger.info(f"[STARTUP] 监听地址: {app.config.get('HOST', '0.0.0.0')}:{app.config.get('PORT', 5000)}")
+    logger.info("生产环境模式: INFO日志已禁用，仅显示error错误，日志保存在 logs/ 目录，如需详细日志请运行 python run.py")
     
     try:
         # 生产环境运行，禁用调试和自动重载

@@ -13,6 +13,7 @@ from app.models import db, Server, ServiceConfig, ServiceMonitorLog, GlobalSetti
 from app.ssh_manager import SSHConnectionManager
 from app.services import ServerService
 from app.notification_service import NotificationService
+from app.ssh_pool_health_checker import SSHPoolHealthChecker
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,23 @@ class ServiceMonitorService:
                 self.app = app  # 更新app引用但不重复初始化
             return
             
-        self.ssh_manager = SSHConnectionManager()
+        # 使用HostMonitor的全局共享SSH连接管理器
+        from app.monitor import HostMonitor
+        if HostMonitor._shared_ssh_manager is None:
+            HostMonitor._shared_ssh_manager = SSHConnectionManager(
+                timeout=30,
+                connect_timeout=10,
+                use_pool=True,
+                max_connections_per_server=3,
+                max_idle_time=300
+            )
+            logger.info("创建全局SSH连接管理器，连接池已启用")
+        self.ssh_manager = HostMonitor._shared_ssh_manager
+        
+        # 初始化健康检查器
+        self.health_checker = SSHPoolHealthChecker(self.ssh_manager)
+        
+        logger.info("服务监控服务已初始化，SSH连接池已启用")
         self.server_service = ServerService()
         self.notification_service = NotificationService()
         self._monitor_thread = None
@@ -45,7 +62,7 @@ class ServiceMonitorService:
         self.app = app
         self._initialized = True
         
-        logger.info("ServiceMonitorService 初始化完成（单例模式）")
+        logger.info("ServiceMonitorService 初始化完成（单例模式），SSH连接池已启用")
     
     def create_service_config(self, data: Dict[str, Any]) -> Tuple[bool, str, Optional[ServiceConfig]]:
         """
@@ -1087,7 +1104,7 @@ class ServiceMonitorService:
             monitoring_services_list = ServiceConfig.query.filter_by(is_monitoring=True).all()
             
             for service in monitoring_services_list:
-                # 获取最新监控日志
+                # 获取最新的监控日志
                 latest_log = ServiceMonitorLog.query.filter_by(
                     service_config_id=service.id
                 ).order_by(ServiceMonitorLog.monitor_time.desc()).first()
@@ -1206,6 +1223,51 @@ class ServiceMonitorService:
             'thread_alive': self._monitor_thread.is_alive() if self._monitor_thread else False
         }
     
+    def get_ssh_pool_stats(self) -> Dict[str, Any]:
+        """
+        获取SSH连接池统计信息
+        
+        Returns:
+            连接池统计信息
+        """
+        try:
+            return self.ssh_manager.get_pool_stats()
+        except Exception as e:
+            logger.error(f"获取SSH连接池统计信息失败: {str(e)}")
+            return {'error': str(e)}
+    
+    def get_ssh_pool_health(self):
+        """获取SSH连接池健康状态"""
+        try:
+            return self.health_checker.check_pool_health()
+        except Exception as e:
+            logger.error(f"获取SSH连接池健康状态失败: {str(e)}")
+            return None
+    
+    def get_ssh_pool_health_trends(self, server=None, hours=24):
+        """获取SSH连接池健康趋势"""
+        try:
+            return self.health_checker.get_health_trends(server, hours)
+        except Exception as e:
+            logger.error(f"获取SSH连接池健康趋势失败: {str(e)}")
+            return None
+    
+    def diagnose_ssh_pool_issues(self):
+        """诊断SSH连接池问题"""
+        try:
+            return self.health_checker.diagnose_issues()
+        except Exception as e:
+            logger.error(f"诊断SSH连接池问题失败: {str(e)}")
+            return []
+    
+    def close_ssh_pool(self):
+        """关闭SSH连接池"""
+        try:
+            self.ssh_manager.close_pool()
+            logger.info("SSH连接池已关闭")
+        except Exception as e:
+            logger.error(f"关闭SSH连接池失败: {str(e)}")
+
     def _monitor_loop(self):
         """
         监控循环线程

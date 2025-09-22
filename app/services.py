@@ -11,7 +11,12 @@ class ServerService:
     """服务器管理服务"""
     
     def __init__(self):
-        self.ssh_manager = SSHConnectionManager()
+        # 使用HostMonitor的全局共享SSH连接管理器
+        from app.monitor import HostMonitor
+        if HostMonitor._shared_ssh_manager is None:
+            HostMonitor._shared_ssh_manager = SSHConnectionManager()
+            logger.info("创建全局SSH连接管理器，连接池已启用")
+        self.ssh_manager = HostMonitor._shared_ssh_manager
         # 从配置文件获取加密密钥
         self.cipher_key = self._get_cipher_key()
     
