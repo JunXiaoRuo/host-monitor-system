@@ -38,14 +38,18 @@ class ServiceMonitorService:
         # 使用HostMonitor的全局共享SSH连接管理器
         from app.monitor import HostMonitor
         if HostMonitor._shared_ssh_manager is None:
+            # 获取配置文件中的参数，而不是使用硬编码值
+            from app.ssh_pool_config import ssh_pool_config_manager
+            config = ssh_pool_config_manager.get_config()
+            
             HostMonitor._shared_ssh_manager = SSHConnectionManager(
-                timeout=30,
-                connect_timeout=10,
+                timeout=config.command_timeout,
+                connect_timeout=config.connect_timeout,
                 use_pool=True,
-                max_connections_per_server=3,
-                max_idle_time=300
+                max_connections_per_server=config.max_connections_per_server,
+                max_idle_time=config.max_idle_time
             )
-            logger.info("创建全局SSH连接管理器，连接池已启用")
+            logger.info(f"创建全局SSH连接管理器，连接池已启用，max_idle_time={config.max_idle_time}秒")
         self.ssh_manager = HostMonitor._shared_ssh_manager
         
         # 初始化健康检查器

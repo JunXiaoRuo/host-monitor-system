@@ -15,12 +15,12 @@ class SSHPoolConfig:
     
     # 连接池基本配置
     max_connections_per_server: int = 3  # 每个服务器的最大连接数
-    max_idle_time: int = 300  # 连接最大空闲时间（秒）
+    max_idle_time: int = 3600  # 连接最大空闲时间（秒）
     cleanup_interval: int = 60  # 清理线程运行间隔（秒）
     
     # 连接超时配置
-    connect_timeout: int = 10  # 连接超时时间（秒）
-    command_timeout: int = 30  # 命令执行超时时间（秒）
+    connect_timeout: int = 60  # 连接超时时间（秒）
+    command_timeout: int = 60  # 命令执行超时时间（秒）
     
     # 健康检查配置
     health_check_enabled: bool = True  # 是否启用健康检查

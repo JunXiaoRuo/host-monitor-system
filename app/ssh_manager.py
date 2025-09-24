@@ -351,21 +351,37 @@ class SSHConnectionPool:
 class SSHConnectionManager:
     """SSH连接管理器"""
     
-    def __init__(self, timeout=30, connect_timeout=10, use_pool=True, 
-                 max_connections_per_server=3, max_idle_time=300):
-        self.timeout = timeout
-        self.connect_timeout = connect_timeout
+    def __init__(self, timeout=None, connect_timeout=None, use_pool=True, 
+                 max_connections_per_server=None, max_idle_time=None):
+        # 获取配置文件中的默认值
+        config = ssh_pool_config_manager.get_config()
+        
+        self.timeout = timeout if timeout is not None else config.command_timeout
+        self.connect_timeout = connect_timeout if connect_timeout is not None else config.connect_timeout
         self.use_pool = use_pool
         
         # 初始化连接池
         if self.use_pool:
-            # 创建自定义配置
-            from app.ssh_pool_config import SSHPoolConfig
+            # 使用配置文件中的值作为默认值
             pool_config = SSHPoolConfig(
-                max_connections_per_server=max_connections_per_server,
-                max_idle_time=max_idle_time
+                max_connections_per_server=max_connections_per_server if max_connections_per_server is not None else config.max_connections_per_server,
+                max_idle_time=max_idle_time if max_idle_time is not None else config.max_idle_time,
+                cleanup_interval=config.cleanup_interval,
+                connect_timeout=self.connect_timeout,
+                command_timeout=self.timeout,
+                health_check_enabled=config.health_check_enabled,
+                health_check_interval=config.health_check_interval,
+                health_check_command=config.health_check_command,
+                health_check_timeout=config.health_check_timeout,
+                max_retries=config.max_retries,
+                retry_delay=config.retry_delay,
+                enable_pool_monitoring=config.enable_pool_monitoring,
+                pool_stats_log_interval=config.pool_stats_log_interval,
+                validate_connection_on_borrow=config.validate_connection_on_borrow,
+                validate_connection_on_return=config.validate_connection_on_return
             )
             self.connection_pool = SSHConnectionPool(config=pool_config)
+            logger.info(f"SSH连接池已初始化，max_idle_time={pool_config.max_idle_time}秒")
         else:
             self.connection_pool = None
     

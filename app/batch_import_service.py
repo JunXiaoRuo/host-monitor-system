@@ -32,13 +32,13 @@ class BatchImportService:
         try:
             # 创建服务器模板数据
             server_template_data = {
-                '服务器名称': ['Web服务器01', 'DB服务器01'],
-                '主机地址': ['192.168.1.100', '192.168.1.101'],
+                '服务器名称': ['一区DAS服务器主机', '一区DAS服务器备机'],
+                '主机地址': ['210.10.1.3', '210.10.1.4'],
                 'SSH端口': [22, 22],
                 '用户名': ['root', 'admin'],
                 '密码': ['password123', 'admin123'],
                 '私钥路径': ['', ''],
-                '描述': ['Web应用服务器', '数据库服务器'],
+                '描述': ['一区DAS服务器主', '一区DAS服务器备'],
                 '状态': ['active', 'active']
             }
             
@@ -90,11 +90,13 @@ class BatchImportService:
         try:
             # 创建服务配置模板数据
             service_template_data = {
-                '服务器名称': ['Web服务器01', 'Web服务器01', 'DB服务器01'],
-                '服务名称': ['Nginx服务', 'PHP-FPM服务', 'MySQL服务'],
-                '进程名称': ['nginx', 'php-fpm', 'mysqld'],
+                '服务器名称': ['一区DAS服务器主机', '一区DAS服务器备机', 'CR12'],
+                '服务名称': ['节点管理服务', '节点管理服务', '节点管理服务'],
+                '进程名称': ['nodemanagerserver', 'nodemanagerserver', 'nodemanagerserver'],
                 '是否监控': [True, True, True],
-                '服务描述': ['Web服务器', 'PHP处理服务', '数据库服务']
+                '启动命令': ['java -jar /home/h-a2/vl/home/ulib1/apl/java/NodeManager/nodemanagerserver.jar &', 'java -jar /home/h-a2/vl/home/ulib1/apl/java/NodeManager/nodemanagerserver.jar &', 'java -jar /home/h-a2/vl/home/DasWebClient/app/NodeManager/nodemanagerserver.jar &'],
+                '自动重启': [False, False, True],
+                '服务描述': ['一区DAS服务器主', '一区DAS服务器备', 'DAS工作站112']
             }
             
             # 创建DataFrame
@@ -116,7 +118,9 @@ class BatchImportService:
                     'B': 20,  # 服务名称
                     'C': 15,  # 进程名称
                     'D': 12,  # 是否监控
-                    'E': 30   # 服务描述
+                    'E': 35,  # 启动命令
+                    'F': 12,  # 自动重启
+                    'G': 30   # 服务描述
                 }
                 
                 for col, width in column_widths.items():
@@ -229,6 +233,8 @@ class BatchImportService:
                         'service_name': safe_str(row['服务名称']),
                         'process_name': safe_str(row['进程名称']),
                         'is_monitoring': bool(row.get('是否监控', True)) if pd.notna(row.get('是否监控')) else True,
+                        'start_command': safe_str(row.get('启动命令', '')),
+                        'auto_restart': bool(row.get('自动重启', False)) if pd.notna(row.get('自动重启')) else False,
                         'description': safe_str(row.get('服务描述', ''))
                     }
                     
@@ -342,6 +348,8 @@ class BatchImportService:
                         service_name=service_data['service_name'],
                         process_name=service_data['process_name'],
                         is_monitoring=service_data['is_monitoring'],
+                        start_command=service_data.get('start_command', ''),
+                        auto_restart=service_data.get('auto_restart', False),
                         description=service_data['description']
                     )
                     
