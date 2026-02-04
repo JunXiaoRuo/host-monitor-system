@@ -278,6 +278,9 @@ class NotificationChannel(db.Model):
 class ServiceConfig(db.Model):
     """服务配置表"""
     __tablename__ = 'service_configs'
+    __table_args__ = (
+        db.Index('ix_service_configs_server_id', 'server_id'),
+    )
     
     id = db.Column(db.Integer, primary_key=True)
     server_id = db.Column(db.Integer, db.ForeignKey('servers.id'), nullable=False)
@@ -315,6 +318,9 @@ class ServiceConfig(db.Model):
 class ServiceMonitorLog(db.Model):
     """服务监控日志表"""
     __tablename__ = 'service_monitor_logs'
+    __table_args__ = (
+        db.Index('ix_service_monitor_logs_service_time', 'service_config_id', 'monitor_time'),
+    )
     
     id = db.Column(db.Integer, primary_key=True)
     service_config_id = db.Column(db.Integer, db.ForeignKey('service_configs.id'), nullable=False)

@@ -9,6 +9,7 @@ import threading
 import time
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
+from sqlalchemy import func
 from app.models import db, Server, ServiceConfig, ServiceMonitorLog, GlobalSettings
 from app.ssh_manager import SSHConnectionManager
 from app.services import ServerService
@@ -187,16 +188,21 @@ class ServiceMonitorService:
             service_config = ServiceConfig.query.get(service_id)
             if not service_config:
                 return False, "服务配置不存在"
-            
+
             service_name = service_config.service_name
-            
-            # 删除配置（级联删除监控日志）
+
+            # 先批量删除监控日志，避免 ORM 级联逐条处理
+            ServiceMonitorLog.query.filter_by(service_config_id=service_id).delete(
+                synchronize_session=False
+            )
+
+            # 再删除服务配置
             db.session.delete(service_config)
             db.session.commit()
-            
+
             logger.info(f"删除服务配置成功: {service_name}")
             return True, "服务配置删除成功"
-            
+
         except Exception as e:
             db.session.rollback()
             logger.error(f"删除服务配置失败: {str(e)}")
@@ -214,16 +220,36 @@ class ServiceMonitorService:
         """
         try:
             services = ServiceConfig.query.filter_by(server_id=server_id).all()
+            if not services:
+                return []
+
+            service_ids = [service.id for service in services]
+            latest_times = (
+                db.session.query(
+                    ServiceMonitorLog.service_config_id,
+                    func.max(ServiceMonitorLog.monitor_time).label('max_time')
+                )
+                .filter(ServiceMonitorLog.service_config_id.in_(service_ids))
+                .group_by(ServiceMonitorLog.service_config_id)
+                .subquery()
+            )
+
+            latest_logs = (
+                db.session.query(ServiceMonitorLog)
+                .join(
+                    latest_times,
+                    (ServiceMonitorLog.service_config_id == latest_times.c.service_config_id) &
+                    (ServiceMonitorLog.monitor_time == latest_times.c.max_time)
+                )
+                .all()
+            )
+            latest_by_service_id = {log.service_config_id: log for log in latest_logs}
+
             result = []
-            
             for service in services:
                 service_dict = service.to_dict()
-                
-                # 获取最新的监控状态
-                latest_log = ServiceMonitorLog.query.filter_by(
-                    service_config_id=service.id
-                ).order_by(ServiceMonitorLog.monitor_time.desc()).first()
-                
+                latest_log = latest_by_service_id.get(service.id)
+
                 if latest_log:
                     service_dict['latest_status'] = latest_log.status
                     service_dict['latest_process_count'] = latest_log.process_count
@@ -232,11 +258,11 @@ class ServiceMonitorService:
                     service_dict['latest_status'] = 'unknown'
                     service_dict['latest_process_count'] = 0
                     service_dict['latest_monitor_time'] = None
-                
+
                 result.append(service_dict)
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"获取服务配置列表失败: {str(e)}")
             return []
@@ -251,47 +277,40 @@ class ServiceMonitorService:
         try:
             servers = Server.query.filter_by(status='active').all()
             result = []
-            
+
             for server in servers:
                 server_dict = server.to_dict()
-                
-                # 获取该服务器的所有服务配置
-                services = ServiceConfig.query.filter_by(server_id=server.id).all()
-                
-                # 统计信息
-                total_services = len(services)
-                monitoring_services = len([s for s in services if s.is_monitoring])
-                
-                # 获取最新状态统计
+
+                services_data = self.get_services_by_server(server.id)
+
+                total_services = len(services_data)
+                monitoring_services = len([s for s in services_data if s.get('is_monitoring')])
+
                 normal_count = 0
                 error_count = 0
-                
-                for service in services:
-                    if not service.is_monitoring:
+
+                for service in services_data:
+                    if not service.get('is_monitoring'):
                         continue
-                    
-                    latest_log = ServiceMonitorLog.query.filter_by(
-                        service_config_id=service.id
-                    ).order_by(ServiceMonitorLog.monitor_time.desc()).first()
-                    
-                    if latest_log:
-                        if latest_log.status == 'running':
-                            normal_count += 1
-                        elif latest_log.status in ['stopped', 'error', 'connection_failed']:
-                            error_count += 1
-                
+
+                    status = service.get('latest_status')
+                    if status == 'running':
+                        normal_count += 1
+                    elif status in ['stopped', 'error', 'connection_failed']:
+                        error_count += 1
+
                 server_dict.update({
                     'total_services': total_services,
                     'monitoring_services': monitoring_services,
                     'normal_services': normal_count,
                     'error_services': error_count,
-                    'services': self.get_services_by_server(server.id)
+                    'services': services_data
                 })
-                
+
                 result.append(server_dict)
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"获取服务器服务统计失败: {str(e)}")
             return []
@@ -1096,29 +1115,44 @@ class ServiceMonitorService:
             服务总览数据
         """
         try:
-            # 获取所有服务配置
             total_services = ServiceConfig.query.count()
             monitoring_services = ServiceConfig.query.filter_by(is_monitoring=True).count()
-            
-            # 获取最新状态统计
+
             normal_count = 0
             error_count = 0
-            
-            # 获取所有启用监控的服务
-            monitoring_services_list = ServiceConfig.query.filter_by(is_monitoring=True).all()
-            
-            for service in monitoring_services_list:
-                # 获取最新的监控日志
-                latest_log = ServiceMonitorLog.query.filter_by(
-                    service_config_id=service.id
-                ).order_by(ServiceMonitorLog.monitor_time.desc()).first()
-                
-                if latest_log:
-                    if latest_log.status == 'running':
-                        normal_count += 1
-                    elif latest_log.status in ['stopped', 'error', 'connection_failed']:
-                        error_count += 1
-            
+
+            monitoring_ids = [
+                service_id for (service_id,) in
+                db.session.query(ServiceConfig.id).filter_by(is_monitoring=True).all()
+            ]
+            if monitoring_ids:
+                latest_times = (
+                    db.session.query(
+                        ServiceMonitorLog.service_config_id,
+                        func.max(ServiceMonitorLog.monitor_time).label('max_time')
+                    )
+                    .filter(ServiceMonitorLog.service_config_id.in_(monitoring_ids))
+                    .group_by(ServiceMonitorLog.service_config_id)
+                    .subquery()
+                )
+
+                status_counts = (
+                    db.session.query(ServiceMonitorLog.status, func.count())
+                    .join(
+                        latest_times,
+                        (ServiceMonitorLog.service_config_id == latest_times.c.service_config_id) &
+                        (ServiceMonitorLog.monitor_time == latest_times.c.max_time)
+                    )
+                    .group_by(ServiceMonitorLog.status)
+                    .all()
+                )
+
+                for status, count in status_counts:
+                    if status == 'running':
+                        normal_count += count
+                    elif status in ['stopped', 'error', 'connection_failed']:
+                        error_count += count
+
             return {
                 'total_services': total_services,
                 'monitoring_services': monitoring_services,
@@ -1127,7 +1161,7 @@ class ServiceMonitorService:
                 'is_monitoring': self._is_monitoring,
                 'monitor_interval': self.get_service_monitor_interval()
             }
-            
+
         except Exception as e:
             logger.error(f"获取服务总览数据失败: {str(e)}")
             return {
