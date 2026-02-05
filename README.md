@@ -35,17 +35,29 @@
 
 ## 🛠️ 快速开始
 
-### 1. 环境准备
+###  环境准备
 
+#### 运行环境
+```bash
+1、安装Python3.8，并配置环境变量，打开cmd终端输入"python -V"输出版本号即可。
+
+2、替换为国内下载源，不然第三步很慢
+pip3 config set global.index-url https://repo.huaweicloud.com/repository/pypi/simple
+pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+#### 程序文件准备
 ```bash
 # 克隆项目（如果从Git获取）
 git clone https://github.com/JunXiaoRuo/host-monitor-system
 cd host-monitor-system
 
-# 或直接解压项目包到目录
+# 或直接下载程序压缩包解压项目包到目录
 ```
 
-### 2. 环境配置
+###  环境配置
+
 
 ```bash
 # 复制环境配置模板
@@ -64,14 +76,14 @@ cp .env.example .env
 - `PORT`: 监听端口（默认5000）
 
 
-### 3. 安装依赖
+###  安装依赖
 
 ```bash
 # 安装Python依赖包
 pip install -r requirements.txt
 ```
 
-### 4. 启动系统
+###  启动系统
 
 ```bash
 # 快速启动脚本
@@ -85,7 +97,7 @@ python run.py
 python start_production.py
 ```
 
-### 5. 系统初始化
+###  系统初始化
 
 1. 浏览器访问: `http://localhost:5000`
 2. 首次访问会自动跳转到初始化页面
@@ -138,8 +150,8 @@ pip install --no-index --find-links python-packages -r requirements.txt
 #### 3. 配置和启动
 
 ```bash
-# 复制配置文件
-cp .env.example .env
+# 复制配置模版文件重命名为.env
+cp .env.example .env  #Linux命令。windows用户直接使用文件管理器操作
 
 # 编辑.env文件，修改相关配置
 # 重要：修改SECRET_KEY和ENCRYPTION_KEY为强密码
