@@ -40,6 +40,7 @@
 #### 运行环境
 ```bash
 1、安装Python3.8，并配置环境变量，打开cmd终端输入"python -V"输出版本号即可。
+这里提供windows安装包，Linux另行下载：https://pan.jrboy.cn/%E6%89%8B%E6%9C%BA%E7%94%B5%E8%84%91%E8%B5%84%E6%BA%90/%E9%A9%B1%E5%8A%A8%E5%8F%8A%E7%8E%AF%E5%A2%83/python-3.8.0-amd64.exe
 
 2、替换为国内下载源，不然第三步很慢
 pip3 config set global.index-url https://repo.huaweicloud.com/repository/pypi/simple

@@ -138,7 +138,7 @@ pip install --no-index --find-links python-packages -r requirements.txt
 echo 验证安装...
 python -c "import flask; print('安装成功!')"
 
-echo 完成! 现在可以运行: start.bat/start.sh
+echo 完成! 现在可以运行: start.bat/start.sh，如果遇到红色报错请重新执行本脚本。
 pause
 """
     
@@ -163,7 +163,7 @@ pip install --no-index --find-links python-packages -r requirements.txt
 echo "验证安装..."
 python -c "import flask; print('安装成功!')"
 
-echo "完成! 现在可以运行: start.sh/start.bat"
+echo "完成! 现在可以运行: start.sh/start.bat，如果遇到红色报错请重新执行本脚本。"
 """
 
     with open("install_offline.sh", "w", encoding="utf-8", newline="\n") as f:
