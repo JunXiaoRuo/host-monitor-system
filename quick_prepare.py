@@ -144,6 +144,30 @@ pause
     
     with open("install_offline.bat", "w", encoding="GBK") as f:
         f.write(install_script)
+
+    install_script_sh = """#!/usr/bin/env bash
+set -e
+
+echo "主机巡视系统 - 离线安装"
+echo "========================"
+
+python3 --version || python --version
+if [ $? -ne 0 ]; then
+  echo "错误: 请先安装 Python 3.8+"
+  exit 1
+fi
+
+echo "安装依赖包..."
+pip install --no-index --find-links python-packages -r requirements.txt
+
+echo "验证安装..."
+python -c "import flask; print('安装成功!')"
+
+echo "完成! 现在可以运行: start.sh/start.bat"
+"""
+
+    with open("install_offline.sh", "w", encoding="utf-8", newline="\n") as f:
+        f.write(install_script_sh)
     
     # 统计文件
     pkg_files = list(packages_dir.glob("*"))
@@ -151,10 +175,10 @@ pause
     
     print(f"\n🎉 准备完成!")
     print(f"📊 统计: {len(pkg_files)} 个Python包, {total_size:.1f} MB")
-    print(f"📊 静态资源: Bootstrap CSS/JS/Icons 已本地化")
+    #print(f"📊 静态资源: Bootstrap CSS/JS/Icons 已本地化")
     print(f"\n📋 接下来的步骤:")
     print(f"1. 将整个项目文件夹复制到内网机器")
-    print(f"2. 在内网机器上双击运行 install_offline.bat")
+    print(f"2. 在内网机器上运行 install_offline.bat/install_offline.sh")
     print(f"3. 运行 start.bat/start.sh 启动服务")
 
 if __name__ == "__main__":

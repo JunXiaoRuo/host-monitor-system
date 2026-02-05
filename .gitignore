@@ -110,3 +110,4 @@ reports/*.html
 !reports/.gitkeep
 !logs/.gitkeep
 install_offline.bat
+install_offline.sh

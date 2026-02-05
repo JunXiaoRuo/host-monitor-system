@@ -17,7 +17,6 @@
 - 📈 **完整历史记录**: 监控历史、执行日志、系统状态变化记录
 - 📝 **系统日志管理**: 实时查看系统运行日志，支持多种日志文件切换和自动刷新
 - 🔐 **安全认证机制**: 管理员登录认证，密码加密存储，会话管理
-- 🎯 **响应式界面**: Bootstrap构建的现代化响应式Web界面
 - 🚀 **高并发处理**: 多线程并发监控，提高监控效率
 
 ## 📋 系统要求
@@ -41,7 +40,7 @@
 ```bash
 # 克隆项目（如果从Git获取）
 git clone https://github.com/JunXiaoRuo/host-monitor-system
-cd 主机巡视
+cd host-monitor-system
 
 # 或直接解压项目包到目录
 ```
@@ -110,18 +109,11 @@ python quick_prepare.py
 
 此脚本会自动：
 - 下载所有Python依赖包
-- 下载Bootstrap CSS/JS文件到本地
-- 下载Bootstrap Icons字体文件
-- 自动修复字体路径引用
 - 生成离线安装脚本
 
-#### 方式二：使用批处理脚本
+#### 方式二：手动下载依赖
 
 ```bash
-# Windows环境
-double-click download_packages.bat
-
-# 或手动执行
 pip download -r requirements.txt --dest python-packages
 ```
 
@@ -136,7 +128,10 @@ pip download -r requirements.txt --dest python-packages
 # Windows环境：双击运行
 install_offline.bat
 
-# Linux/Mac环境
+# Linux：环境
+./install_offline.sh
+
+# 手动执行：
 pip install --no-index --find-links python-packages -r requirements.txt
 ```
 
@@ -238,7 +233,6 @@ python reset_password.py admin newpassword123
 
 ### 技术架构
 
-- **前端**: Bootstrap + JavaScript (响应式界面)
 - **后端**: Flask + SQLAlchemy
 - **数据库**: SQLite (轻量级，无需额外配置)
 - **任务调度**: APScheduler
@@ -268,14 +262,9 @@ python reset_password.py admin newpassword123
 │   └── setup.html              # 初始化设置页面
 ├── static/                      # 静态资源文件
 │   ├── css/                    # CSS样式文件
-│   │   ├── bootstrap.min.css   # Bootstrap框架样式（本地化）
-│   │   └── bootstrap-icons.css # Bootstrap图标样式（本地化）
 │   ├── js/                     # JavaScript脚本文件
 │   │   ├── main.js             # 主要JavaScript逻辑
-│   │   └── bootstrap.bundle.min.js # Bootstrap框架脚本（本地化）
 │   └── fonts/                  # 字体文件
-│       ├── bootstrap-icons.woff  # Bootstrap图标字体
-│       └── bootstrap-icons.woff2 # Bootstrap图标字体
 ├── instance/                    # Flask实例配置目录
 │   └── host_monitor.db         # SQLite数据库文件
 ├── reports/                     # 生成的监控报告

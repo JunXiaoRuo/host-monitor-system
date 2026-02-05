@@ -868,8 +868,8 @@ class SSHConnectionManager:
         disk_info = []
         
         try:
-            # 使用df -h获取磁盘使用情况
-            command = "df -h | grep -E '^/dev/'"
+            # 使用df -hP获取磁盘使用情况，避免设备名过长导致换行
+            command = "df -hP"
             result = self.execute_command(client, command, timeout=10)
             
             if result['success']:
