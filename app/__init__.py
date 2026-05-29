@@ -1718,11 +1718,13 @@ def create_app(config_object='config.Config'):
         """获取服务监控设置"""
         try:
             monitor_interval = service_monitor_service.get_service_monitor_interval()
+            restart_cooldown = service_monitor_service.get_restart_cooldown()
             
             return jsonify({
                 'success': True,
                 'data': {
-                    'monitor_interval': monitor_interval
+                    'monitor_interval': monitor_interval,
+                    'restart_cooldown': restart_cooldown
                 }
             })
             
@@ -1737,15 +1739,27 @@ def create_app(config_object='config.Config'):
         try:
             data = request.get_json()
             monitor_interval = data.get('monitor_interval')
+            restart_cooldown = data.get('restart_cooldown')
             
             if not monitor_interval or monitor_interval < 1 or monitor_interval > 1440:
                 return jsonify({'success': False, 'message': '监控间隔必须在1-1440分钟之间'})
+            
+            if restart_cooldown is not None and (restart_cooldown < 60 or restart_cooldown > 86400):
+                return jsonify({'success': False, 'message': '重启冷却时间必须在60-86400秒之间'})
             
             success, message = service_monitor_service.set_global_setting(
                 'service_monitor_interval', 
                 str(monitor_interval), 
                 '服务监控时间间隔（分钟）'
             )
+            
+            # 保存重启冷却时间
+            if restart_cooldown is not None:
+                service_monitor_service.set_global_setting(
+                    'restart_cooldown',
+                    str(restart_cooldown),
+                    '自动重启冷却时间（秒）'
+                )
             
             # 如果设置成功，重启监控循环使新设置立即生效
             if success:

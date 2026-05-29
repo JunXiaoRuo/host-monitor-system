@@ -1,4 +1,4 @@
-"""
+﻿"""
 服务监控模块
 负责服务进程的监控和管理
 """
@@ -7,6 +7,7 @@ import logging
 import re
 import threading
 import time
+import shlex
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy import func
@@ -66,6 +67,7 @@ class ServiceMonitorService:
         self._restart_requested = False  # 重启请求标志
         self.app = app
         self._initialized = True
+        self._restart_cooldown = {}  # {service_id: last_restart_timestamp} 重启冷却记录
         
         logger.info("ServiceMonitorService 初始化完成（单例模式），SSH连接池已启用")
     
@@ -572,32 +574,45 @@ class ServiceMonitorService:
                 
                 # 检查是否需要自动重启
                 if service_config.auto_restart and service_config.start_command:
-                    logger.info(f"服务 {service_config.service_name} 开启了自动重启，尝试执行启动命令")
-                    restart_result = self._execute_restart_command(ssh_client, service_config)
-                    result['restart_attempted'] = True
-                    result['restart_success'] = restart_result['success']
-                    result['restart_message'] = restart_result['message']
-                    
-                    if restart_result['success']:
-                        # 等待3秒后重新检测
-                        logger.info(f"启动命令执行成功，等待3秒后重新检测服务状态")
-                        time.sleep(3)
-                        
-                        # 重新检测服务状态
-                        recheck_result = self._check_service_status(ssh_client, service_config)
-                        if recheck_result['success'] and recheck_result['process_count'] > 0:
-                            result['status'] = 'running'
-                            result['process_count'] = recheck_result['process_count']
-                            result['process_info'] = recheck_result['process_info']
-                            result['auto_restart_status'] = '自启动成功'
-                            logger.info(f"服务 {service_config.service_name} 重启成功，当前状态: 运行中")
-                        else:
-                            result['auto_restart_status'] = '自启动失败'
-                            logger.warning(f"服务 {service_config.service_name} 重启后仍未运行")
+                    # 冷却检查：从设置读取冷却时间，不重复重启同一服务
+                    cooldown_seconds = self.get_restart_cooldown()
+                    last_restart = self._restart_cooldown.get(service_config.id, 0)
+                    elapsed = time.time() - last_restart
+                    if elapsed < cooldown_seconds:
+                        remaining = int((cooldown_seconds - elapsed) / 60)
+                        logger.warning(f"服务 {service_config.service_name} 冷却中，{remaining}分钟后可再次重启")
+                        result['restart_attempted'] = False
+                        result['auto_restart_status'] = f'冷却中({remaining}分钟)'
                     else:
-                        # 重启命令执行失败（包括超时）
-                        result['auto_restart_status'] = '自启动失败'
-                        logger.warning(f"服务 {service_config.service_name} 重启命令执行失败: {restart_result['message']}")
+                        logger.info(f"服务 {service_config.service_name} 开启了自动重启，尝试执行启动命令")
+                        restart_result = self._execute_restart_command(ssh_client, service_config)
+                        result['restart_attempted'] = True
+                        result['restart_success'] = restart_result['success']
+                        result['restart_message'] = restart_result['message']
+                        
+                        if restart_result['success']:
+                            # 记录重启时间，启动冷却计时
+                            self._restart_cooldown[service_config.id] = time.time()
+                            # 等待10秒后重新检测（给服务足够的启动时间）
+                            logger.info(f"启动命令执行成功，等待10秒后重新检测服务状态")
+                            time.sleep(10)
+                            
+                            # 重新检测服务状态
+                            recheck_result = self._check_service_status(ssh_client, service_config)
+                            if recheck_result['success'] and recheck_result['process_count'] > 0:
+                                result['status'] = 'running'
+                                result['process_count'] = recheck_result['process_count']
+                                result['process_info'] = recheck_result['process_info']
+                                result['auto_restart_status'] = '自启动成功'
+                                logger.info(f"服务 {service_config.service_name} 重启成功，当前状态: 运行中")
+                            else:
+                                result['auto_restart_status'] = '自启动失败'
+                                logger.warning(f"服务 {service_config.service_name} 重启后仍未运行")
+                        else:
+                            # 重启命令执行失败（包括超时）
+                            self._restart_cooldown[service_config.id] = time.time()
+                            result['auto_restart_status'] = '自启动失败'
+                            logger.warning(f"服务 {service_config.service_name} 重启命令执行失败: {restart_result['message']}")
                 else:
                     result['restart_attempted'] = False
                     if not service_config.auto_restart:
@@ -634,11 +649,14 @@ class ServiceMonitorService:
             # 如果命令已经包含&，则移除它，避免重复
             if start_cmd.endswith('&'):
                 start_cmd = start_cmd[:-1].strip()
-            # 使用sh -c来避免重定向解析问题
-            background_command = f"sh -c 'nohup {start_cmd} >/dev/null 2>&1 &'"
+            # 使用shlex.quote防止命令注入
+            quoted_cmd = shlex.quote(start_cmd)
+            # bash -l 模拟登录shell，加载用户环境变量和PATH
+            # 用sh -c包裹整个命令，兼容csh/tcsh等非bash远程shell
+            inner_cmd = f"nohup bash -l -c {quoted_cmd} >/dev/null 2>&1 &"
+            background_command = f"sh -c {shlex.quote(inner_cmd)}"
             logger.info(f"实际执行的后台命令: {background_command}")
             cmd_result = self.ssh_manager.execute_command(ssh_client, background_command, timeout=30)
-            
             if cmd_result['success']:
                 logger.info(f"重启命令执行成功，耗时: {cmd_result['execution_time']:.2f}秒")
                 return {
@@ -1107,6 +1125,19 @@ class ServiceMonitorService:
         except:
             return 10
     
+    
+    def get_restart_cooldown(self) -> int:
+        """
+        获取自动重启冷却时间（秒）
+        
+        Returns:
+            冷却时间（默认1800秒=30分钟）
+        """
+        try:
+            cooldown_str = self.get_global_setting('restart_cooldown', '1800')
+            return int(cooldown_str)
+        except:
+            return 1800
     def get_services_overview(self) -> Dict[str, Any]:
         """
         获取服务总览数据

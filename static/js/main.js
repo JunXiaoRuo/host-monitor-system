@@ -1,4 +1,4 @@
-// 全局变量
+﻿// 全局变量
 let currentSection = 'dashboard';
 let serversData = [];
 let schedulesData = [];
@@ -2507,6 +2507,7 @@ function deleteReport(reportId) {
             console.log('删除报告响应状态:', response.status);
             return response.json();
         })
+    .then(response => response.json())
         .then(data => {
             console.log('删除报告响应数据:', data);
             if (data.success) {
@@ -2984,6 +2985,7 @@ function deleteLog(logId) {
             console.log('删除日志响应状态:', response.status);
             return response.json();
         })
+    .then(response => response.json())
         .then(data => {
             console.log('删除日志响应数据:', data);
             if (data.success) {
@@ -4881,6 +4883,11 @@ function loadServicesSettings() {
                 if (intervalInput) {
                     intervalInput.value = interval;
                 }
+                const cooldown = data.data.restart_cooldown || 1800;
+                const cooldownInput = document.getElementById('restartCooldown');
+                if (cooldownInput) {
+                    cooldownInput.value = cooldown;
+                }
             }
         })
         .catch(error => {
@@ -4916,7 +4923,8 @@ function saveServicesSettings() {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            monitor_interval: parseInt(monitorInterval)
+            monitor_interval: parseInt(monitorInterval),
+            restart_cooldown: parseInt(document.getElementById('restartCooldown').value)
         })
     })
     .then(response => response.json())

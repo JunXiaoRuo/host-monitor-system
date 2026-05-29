@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -1051,6 +1051,14 @@
                                 <span class="input-group-text">分钟</span>
                             </div>
                             <div class="form-text">设置自动监控服务的时间间隔（1-1440分钟）</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="restartCooldown" class="form-label">自动重启冷却时间</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="restartCooldown" min="60" max="86400" value="1800">
+                                <span class="input-group-text">秒</span>
+                            </div>
+                            <div class="form-text">服务重启后，冷却时间内不会重复重启（60-86400秒，默认1800秒=30分钟）</div>
                         </div>
                     </form>
                 </div>
