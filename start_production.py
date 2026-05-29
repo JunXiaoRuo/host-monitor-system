@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -62,13 +62,14 @@ for logger_name in silent_loggers:
     # 确保没有处理器
     silent_logger.handlers.clear()
 
-
 logger.info(f"[STARTUP] 项目根目录: {basedir}")
 print(f"[STARTUP] 项目根目录: {basedir}")
 logger.info(f"[STARTUP] 当前工作目录: {os.getcwd()}")
 print(f"[STARTUP] 当前工作目录: {os.getcwd()}")
 logger.info(f"[STARTUP] 切换后工作目录: {os.getcwd()}")
 print(f"[STARTUP] 切换后工作目录: {os.getcwd()}")
+print("[STARTUP] 正在加载模块，请稍候...")
+logger.info("[STARTUP] 正在加载模块...")
 
 try:
     from app import create_app
@@ -82,21 +83,7 @@ try:
     logger.info(f"[STARTUP] ✓ 静态文件目录: {app.static_folder}")
     print(f"[STARTUP] ✓ 静态文件目录: {app.static_folder}")
     
-    # Flask应用创建后，再次确保所有日志器都不输出到控制台
-    all_loggers = [logging.getLogger(name) for name in logging.Logger.manager.loggerDict]
-    all_loggers.append(logging.getLogger())  # 添加根日志器
-    
-    for logger_obj in all_loggers:
-        # 移除所有控制台处理器
-        for handler in logger_obj.handlers[:]:
-            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
-                logger_obj.removeHandler(handler)
-        # 如果不是根日志器且级别低于ERROR，提升到ERROR
-        if logger_obj.name and logger_obj.level < logging.ERROR:
-            logger_obj.setLevel(logging.ERROR)
-        # 禁止传播到父日志器
-        if logger_obj.name:  # 不设置根日志器的propagate
-            logger_obj.propagate = False
+    # 日志静默化已在模块导入前完成，此处无需重复
     
     # 检查模板文件是否存在
     template_path = os.path.join(app.template_folder, 'index.html')

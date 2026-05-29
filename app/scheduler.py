@@ -173,7 +173,8 @@ class SchedulerService:
             # 作业默认设置
             job_defaults = {
                 'coalesce': False,
-                'max_instances': 3
+                'max_instances': 3,
+                'misfire_grace_time': 3600  # seconds
             }
             
             # 创建调度器

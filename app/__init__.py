@@ -1,5 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+﻿from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from app.models import db, Server, MonitorLog, ScheduleTask, Threshold, MonitorReport, AdminUser, NotificationChannel, ServiceConfig, ServiceMonitorLog, GlobalSettings, OSSConfig
 from app.services import ServerService, ThresholdService
 from app.batch_import_service import BatchImportService
@@ -56,19 +55,22 @@ def create_app(config_object='config.Config'):
     db.init_app(app)
     
     # 创建服务实例
+    print("[STARTUP] 🔄 正在初始化服务组件...")
     server_service = ServerService()
     threshold_service = ThresholdService()
     batch_import_service = BatchImportService()
     auth_service = AuthService()
     notification_service = NotificationService()
-    host_monitor = HostMonitor()
     report_generator = ReportGenerator(app.config['REPORT_DIR'])
     service_monitor_service = ServiceMonitorService(app)
+    host_monitor = HostMonitor()  # 在 ServiceMonitorService 之后创建，复用已配置的 SSH 连接池
     
     # 初始化调度器
     scheduler_service = SchedulerService(app.config['SQLALCHEMY_DATABASE_URI'], app.config['REPORT_DIR'])
+    print("[STARTUP] 🔄 正在初始化调度器...")
     
     with app.app_context():
+        print("[STARTUP] 🔄 正在初始化数据库...")
         # 创建数据库表
         db.create_all()
         
@@ -84,6 +86,7 @@ def create_app(config_object='config.Config'):
             logger.info("初始化默认阈值配置")
         
         # 启动调度器
+        print("[STARTUP] 🔄 正在启动调度器...")
         logger.info("开始启动调度器...")
         try:
             if scheduler_service.start_scheduler():
@@ -96,6 +99,7 @@ def create_app(config_object='config.Config'):
             logger.error(f"调度器启动错误详情: {traceback.format_exc()}")
         
         # 启动服务监控循环
+        print("[STARTUP] 🔄 正在启动服务监控...")
         logger.info("开始启动服务监控循环...")
         try:
             success, message = service_monitor_service.start_monitor_loop()
