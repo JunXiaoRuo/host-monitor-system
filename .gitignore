@@ -111,3 +111,4 @@ reports/*.html
 !logs/.gitkeep
 install_offline.bat
 install_offline.sh
+/.vscode
