@@ -207,6 +207,20 @@ class HostMonitor:
                             'used': disk['used'],
                             'available': disk['available']
                         })
+                    inode_usage = disk.get('inode_use_percent')
+                    if inode_usage is not None and inode_usage > thresholds.get('inode_threshold', 90.0):
+                        monitor_result['alerts'].append({
+                            'type': 'inode',
+                            'level': 'warning',
+                            'message': f"挂载点 {disk['mounted_on']} inode 使用率过高: {inode_usage:.2f}% (阈值: {thresholds.get('inode_threshold', 90.0)}%，剩余 inode: {disk.get('inode_available', '未知')})",
+                            'value': inode_usage,
+                            'threshold': thresholds.get('inode_threshold', 90.0),
+                            'filesystem': disk['filesystem'],
+                            'mounted_on': disk['mounted_on'],
+                            'inode_total': disk.get('inode_total'),
+                            'inode_used': disk.get('inode_used'),
+                            'inode_available': disk.get('inode_available')
+                        })
                 
                 # 确定状态
                 if monitor_result['alerts']:
@@ -505,8 +519,15 @@ class HostMonitor:
                     disk_info = log.get_disk_info()
                     # 计算磁盘最大使用率
                     max_disk_usage = 0.0
+                    max_inode_usage = None
                     if disk_info:
                         max_disk_usage = max([disk.get('use_percent', 0.0) for disk in disk_info])
+                        inode_usages = [
+                            disk.get('inode_use_percent') for disk in disk_info
+                            if disk.get('inode_use_percent') is not None
+                        ]
+                        if inode_usages:
+                            max_inode_usage = max(inode_usages)
                     
                     status_dict[log.server_id] = {
                         'status': log.status,
@@ -514,6 +535,7 @@ class HostMonitor:
                         'memory_usage': log.memory_usage,
                         'disk_info': disk_info,
                         'max_disk_usage': max_disk_usage,  # 添加磁盘最大使用率
+                        'max_inode_usage': max_inode_usage,
                         'alert_count': len(log.get_alert_info()),
                         'monitor_time': log.monitor_time.isoformat() if log.monitor_time else None,
                         'execution_time': log.execution_time

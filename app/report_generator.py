@@ -724,6 +724,10 @@ class ReportGenerator:
                     <strong>磁盘阈值</strong><br>
                     {{ thresholds.disk_threshold }}%
                 </div>
+                <div class="threshold-item">
+                    <strong>inode阈值</strong><br>
+                    {{ thresholds.inode_threshold|default(90.0) }}%
+                </div>
             </div>
         </div>
         
@@ -832,6 +836,9 @@ class ReportGenerator:
                                     <th>已用</th>
                                     <th>可用</th>
                                     <th>使用率</th>
+                                    <th>inode已用</th>
+                                    <th>inode可用</th>
+                                    <th>inode使用率</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -843,6 +850,15 @@ class ReportGenerator:
                                     <td>{{ disk.used }}</td>
                                     <td>{{ disk.available }}</td>
                                     <td>{{ "%.1f"|format(disk.use_percent) }}%</td>
+                                    <td>{{ disk.inode_used if disk.inode_used is not none else 'N/A' }}</td>
+                                    <td>{{ disk.inode_available if disk.inode_available is not none else 'N/A' }}</td>
+                                    <td>
+                                        {% if disk.inode_use_percent is not none %}
+                                            {{ "%.1f"|format(disk.inode_use_percent) }}%
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

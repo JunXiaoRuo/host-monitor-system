@@ -486,7 +486,8 @@ class ThresholdService:
                 return {
                     'cpu_threshold': threshold.cpu_threshold,
                     'memory_threshold': threshold.memory_threshold,
-                    'disk_threshold': threshold.disk_threshold
+                    'disk_threshold': threshold.disk_threshold,
+                    'inode_threshold': threshold.inode_threshold or 90.0
                 }
             else:
                 # 返回默认阈值
@@ -494,7 +495,8 @@ class ThresholdService:
                 return {
                     'cpu_threshold': Config.DEFAULT_CPU_THRESHOLD,
                     'memory_threshold': Config.DEFAULT_MEMORY_THRESHOLD,
-                    'disk_threshold': Config.DEFAULT_DISK_THRESHOLD
+                    'disk_threshold': Config.DEFAULT_DISK_THRESHOLD,
+                    'inode_threshold': getattr(Config, 'DEFAULT_INODE_THRESHOLD', 90.0)
                 }
         except Exception as e:
             logger.error(f"获取阈值配置失败: {str(e)}")
@@ -502,7 +504,8 @@ class ThresholdService:
             return {
                 'cpu_threshold': 80.0,
                 'memory_threshold': 80.0,
-                'disk_threshold': 80.0
+                'disk_threshold': 80.0,
+                'inode_threshold': 90.0
             }
     
     def update_threshold_config(self, threshold_data: Dict[str, float]) -> Tuple[bool, str]:
@@ -526,12 +529,15 @@ class ThresholdService:
                     threshold.memory_threshold = threshold_data['memory_threshold']
                 if 'disk_threshold' in threshold_data:
                     threshold.disk_threshold = threshold_data['disk_threshold']
+                if 'inode_threshold' in threshold_data:
+                    threshold.inode_threshold = threshold_data['inode_threshold']
             else:
                 # 创建新配置
                 threshold = Threshold(
                     cpu_threshold=threshold_data.get('cpu_threshold', 80.0),
                     memory_threshold=threshold_data.get('memory_threshold', 80.0),
-                    disk_threshold=threshold_data.get('disk_threshold', 80.0)
+                    disk_threshold=threshold_data.get('disk_threshold', 80.0),
+                    inode_threshold=threshold_data.get('inode_threshold', 90.0)
                 )
                 db.session.add(threshold)
             

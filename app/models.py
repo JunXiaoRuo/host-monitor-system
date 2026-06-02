@@ -52,6 +52,7 @@ class Threshold(db.Model):
     cpu_threshold = db.Column(db.Float, default=80.0, comment='CPU使用率阈值(%)')
     memory_threshold = db.Column(db.Float, default=80.0, comment='内存使用率阈值(%)')
     disk_threshold = db.Column(db.Float, default=80.0, comment='磁盘使用率阈值(%)')
+    inode_threshold = db.Column(db.Float, default=90.0, comment='inode使用率阈值(%)')
     created_at = db.Column(db.DateTime, default=get_local_time)
     updated_at = db.Column(db.DateTime, default=get_local_time, onupdate=get_local_time)
     
@@ -61,6 +62,7 @@ class Threshold(db.Model):
             'cpu_threshold': self.cpu_threshold,
             'memory_threshold': self.memory_threshold,
             'disk_threshold': self.disk_threshold,
+            'inode_threshold': self.inode_threshold,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

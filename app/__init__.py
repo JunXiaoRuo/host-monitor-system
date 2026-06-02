@@ -19,6 +19,23 @@ from log_config import setup_flask_app_logging
 
 logger = logging.getLogger(__name__)
 
+def _ensure_threshold_schema(app):
+    """Add missing threshold columns for existing SQLite deployments."""
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if not db_uri.startswith('sqlite'):
+        return
+
+    try:
+        columns = {row[1] for row in db.session.execute(db.text("PRAGMA table_info(thresholds)")).fetchall()}
+        if 'inode_threshold' not in columns:
+            db.session.execute(db.text("ALTER TABLE thresholds ADD COLUMN inode_threshold FLOAT DEFAULT 90.0"))
+            db.session.execute(db.text("UPDATE thresholds SET inode_threshold = 90.0 WHERE inode_threshold IS NULL"))
+            db.session.commit()
+            logger.info("已为阈值配置表添加 inode_threshold 字段")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"检查阈值配置表结构失败: {str(e)}")
+
 def create_app(config_object='config.Config'):
     """创建Flask应用"""
     # 获取项目根目录路径
@@ -73,13 +90,15 @@ def create_app(config_object='config.Config'):
         print("[STARTUP] 🔄 正在初始化数据库...")
         # 创建数据库表
         db.create_all()
+        _ensure_threshold_schema(app)
         
         # 初始化默认阈值
         if not Threshold.query.first():
             threshold = Threshold(
                 cpu_threshold=app.config.get('DEFAULT_CPU_THRESHOLD', 80.0),
                 memory_threshold=app.config.get('DEFAULT_MEMORY_THRESHOLD', 80.0),
-                disk_threshold=app.config.get('DEFAULT_DISK_THRESHOLD', 80.0)
+                disk_threshold=app.config.get('DEFAULT_DISK_THRESHOLD', 80.0),
+                inode_threshold=app.config.get('DEFAULT_INODE_THRESHOLD', 90.0)
             )
             db.session.add(threshold)
             db.session.commit()
@@ -292,6 +311,9 @@ def create_app(config_object='config.Config'):
                             elif alert['type'] == 'disk':
                                 available_text = alert.get('available') or '未知'
                                 alert_details.append(f"磁盘告警: 磁盘 {alert['mounted_on']} 使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%，剩余空间: {available_text})")
+                            elif alert['type'] == 'inode':
+                                inode_available = alert.get('inode_available', '未知')
+                                alert_details.append(f"inode告警: 挂载点 {alert['mounted_on']} inode 使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%，剩余 inode: {inode_available})")
                         
                         if alert_details or status['status'] == 'failed':
                             alerts_overview.append({

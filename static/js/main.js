@@ -491,9 +491,18 @@ function updateServerStatusList(serverStatus) {
                         return 'N/A';
                     })()}</small></div>
                     <div class="col-md-2"><small>磁盘(max): ${status.max_disk_usage !== null && status.max_disk_usage !== undefined ? status.max_disk_usage.toFixed(1) + '%' : 'N/A'}</small></div>
-                    <div class="col-md-2"><small>告警: ${status.alert_count || 0}个</small></div>
+                    <div class="col-md-2"><small>inode(max): ${(() => {
+                        if (status.max_inode_usage !== null && status.max_inode_usage !== undefined) {
+                            const inodeThreshold = thresholdsData?.inode_threshold || 90;
+                            const isOverThreshold = status.max_inode_usage > inodeThreshold;
+                            const colorClass = isOverThreshold ? 'text-danger fw-bold' : '';
+                            return `<span class="${colorClass}">${status.max_inode_usage.toFixed(1)}%</span>`;
+                        }
+                        return 'N/A';
+                    })()}</small></div>
+                    <div class="col-md-1"><small>告警: ${status.alert_count || 0}个</small></div>
                     <div class="col-md-2"><small>耗时: ${status.execution_time ? status.execution_time.toFixed(2) + 's' : 'N/A'}</small></div>
-                    <div class="col-md-2"><small><button class="btn btn-sm btn-outline-secondary" onclick="toggleServerDetails('${serverId}')" title="展开详情"><i class="bi bi-chevron-down"></i></button></small></div>
+                    <div class="col-md-1"><small><button class="btn btn-sm btn-outline-secondary" onclick="toggleServerDetails('${serverId}')" title="展开详情"><i class="bi bi-chevron-down"></i></button></small></div>
                 </div>
                 <div id="server-details-${serverId}" class="server-details" style="display: none;">
                     <!-- 详细信息将在这里显示 -->
@@ -642,6 +651,11 @@ function renderServerDiskDetails(serverId, diskData) {
     diskData.disk_info.forEach((disk, index) => {
         const usagePercent = disk.use_percent || 0;
         const statusClass = usagePercent > 90 ? 'danger' : usagePercent > 80 ? 'warning' : 'success';
+        const inodeUsagePercent = disk.inode_use_percent;
+        const inodeThreshold = thresholdsData?.inode_threshold || 90;
+        const inodeStatusClass = inodeUsagePercent === null || inodeUsagePercent === undefined
+            ? 'secondary'
+            : inodeUsagePercent > inodeThreshold ? 'danger' : inodeUsagePercent > 80 ? 'warning' : 'success';
         
         html += `
             <div class="col-md-6 mb-2">
@@ -659,10 +673,17 @@ function renderServerDiskDetails(serverId, diskData) {
                                 <small class="text-muted">
                                     ${formatBytes(disk.used || '0')} / ${formatBytes(disk.size || '0')}
                                 </small>
+                                <br>
+                                <small class="text-muted">
+                                    inode: ${inodeUsagePercent !== null && inodeUsagePercent !== undefined ? `<span class="text-${inodeStatusClass} fw-bold">${inodeUsagePercent.toFixed(1)}%</span>` : 'N/A'}
+                                </small>
                             </div>
                         </div>
                         <div class="progress mt-1" style="height: 4px;">
                             <div class="progress-bar bg-${statusClass}" style="width: ${usagePercent}%"></div>
+                        </div>
+                        <div class="progress mt-1" style="height: 4px;">
+                            <div class="progress-bar bg-${inodeStatusClass}" style="width: ${inodeUsagePercent || 0}%"></div>
                         </div>
                     </div>
                 </div>
@@ -2315,6 +2336,7 @@ function loadThresholds() {
                 const cpuThresholdElement = document.getElementById('cpuThreshold');
                 const memoryThresholdElement = document.getElementById('memoryThreshold');
                 const diskThresholdElement = document.getElementById('diskThreshold');
+                const inodeThresholdElement = document.getElementById('inodeThreshold');
                 
                 if (cpuThresholdElement) {
                     cpuThresholdElement.value = data.data.cpu_threshold;
@@ -2324,6 +2346,9 @@ function loadThresholds() {
                 }
                 if (diskThresholdElement) {
                     diskThresholdElement.value = data.data.disk_threshold;
+                }
+                if (inodeThresholdElement) {
+                    inodeThresholdElement.value = data.data.inode_threshold || 90;
                 }
             } else {
                 showAlert('加载阈值配置失败: ' + data.message, 'danger');
@@ -2340,13 +2365,15 @@ function saveThresholds() {
     const formData = {
         cpu_threshold: parseFloat(document.getElementById('cpuThreshold').value),
         memory_threshold: parseFloat(document.getElementById('memoryThreshold').value),
-        disk_threshold: parseFloat(document.getElementById('diskThreshold').value)
+        disk_threshold: parseFloat(document.getElementById('diskThreshold').value),
+        inode_threshold: parseFloat(document.getElementById('inodeThreshold').value)
     };
     
     // 验证数据
     if (formData.cpu_threshold < 1 || formData.cpu_threshold > 100 ||
         formData.memory_threshold < 1 || formData.memory_threshold > 100 ||
-        formData.disk_threshold < 1 || formData.disk_threshold > 100) {
+        formData.disk_threshold < 1 || formData.disk_threshold > 100 ||
+        formData.inode_threshold < 1 || formData.inode_threshold > 100) {
         showAlert('阈值必须在1-100之间', 'warning');
         return;
     }
@@ -2740,13 +2767,14 @@ function showLogDetailModal(logData) {
                     <tr>
                         <th>文件系统</th>
                         <th>挂载点</th>
-                        <th>大小</th>
-                        <th>已用</th>
-                        <th>可用</th>
-                        <th>使用率</th>
-                    </tr>
-                </thead>
-                <tbody>
+                            <th>大小</th>
+                            <th>已用</th>
+                            <th>可用</th>
+                            <th>使用率</th>
+                            <th>inode使用率</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                     ${logData.disk_info.map(disk => `
                         <tr ${(() => {
                             const diskThreshold = thresholdsData?.disk_threshold || 80;
@@ -2759,6 +2787,7 @@ function showLogDetailModal(logData) {
                             <td>${disk.used}</td>
                             <td>${disk.available}</td>
                             <td>${disk.use_percent.toFixed(1)}%</td>
+                            <td>${disk.inode_use_percent !== null && disk.inode_use_percent !== undefined ? disk.inode_use_percent.toFixed(1) + '%' : 'N/A'}</td>
                         </tr>
                     `).join('')}
                 </tbody>

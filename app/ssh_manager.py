@@ -34,6 +34,19 @@ class ConnectionInfo:
                 self.password == other.password and
                 self.private_key_path == other.private_key_path)
 
+    def __repr__(self):
+        auth_type = 'private_key' if self.private_key_path else 'password' if self.password else 'none'
+        return (
+            "ConnectionInfo("
+            f"host={self.host!r}, port={self.port!r}, username={self.username!r}, "
+            f"auth_type={auth_type!r}, password='***', private_key_path='***'"
+            ")"
+        )
+
+    @property
+    def safe_label(self) -> str:
+        return f"{self.username}@{self.host}:{self.port}"
+
 class PooledSSHConnection:
     """连接池中的SSH连接"""
     
@@ -141,8 +154,8 @@ class SSHConnectionPool:
         """从连接池获取连接"""
         with self.lock:
             logger.info(f"连接池查找: {conn_info.host}:{conn_info.port}")
-            logger.info(f"当前连接池键值: {list(self.pools.keys())}")
-            logger.info(f"查找的连接信息: {conn_info}")
+            logger.debug(f"当前连接池键值: {[key.safe_label for key in self.pools.keys()]}")
+            logger.debug(f"查找的连接信息: {conn_info}")
             
             # 尝试从池中获取可用连接
             if conn_info in self.pools:
@@ -868,7 +881,7 @@ class SSHConnectionManager:
         disk_info = []
         
         try:
-            # 使用df -hP获取磁盘使用情况，避免设备名过长导致换行
+            # 使用df -hP获取磁盘空间，df -iP获取inode使用率。
             command = "df -hP"
             result = self.execute_command(client, command, timeout=10)
             
@@ -878,7 +891,7 @@ class SSHConnectionManager:
                 for line in lines:
                     if line.strip():
                         parts = line.split()
-                        if len(parts) >= 6:
+                        if len(parts) >= 6 and parts[0].lower() != 'filesystem':
                             filesystem = parts[0]
                             size = parts[1]
                             used = parts[2]
@@ -899,6 +912,32 @@ class SSHConnectionManager:
                                 'use_percent': use_percent_float,
                                 'mounted_on': mounted_on
                             })
+
+            inode_result = self.execute_command(client, "df -iP", timeout=10)
+            if inode_result['success']:
+                inode_by_mount = {}
+                lines = inode_result['stdout'].strip().split('\n')
+                for line in lines:
+                    if line.strip():
+                        parts = line.split()
+                        if len(parts) >= 6 and parts[0].lower() != 'filesystem':
+                            try:
+                                inode_by_mount[parts[5]] = {
+                                    'inode_total': int(parts[1]),
+                                    'inode_used': int(parts[2]),
+                                    'inode_available': int(parts[3]),
+                                    'inode_use_percent': float(parts[4].rstrip('%'))
+                                }
+                            except ValueError:
+                                continue
+
+                for disk in disk_info:
+                    disk.update(inode_by_mount.get(disk.get('mounted_on'), {
+                        'inode_total': None,
+                        'inode_used': None,
+                        'inode_available': None,
+                        'inode_use_percent': None
+                    }))
             
         except Exception as e:
             logger.error(f"获取磁盘使用情况失败: {str(e)}")
