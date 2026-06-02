@@ -1181,6 +1181,26 @@ def create_app(config_object='config.Config'):
         except Exception as e:
             logger.error(f"下载报告失败: {str(e)}")
             return jsonify({'success': False, 'message': str(e)})
+
+    @app.route('/api/reports/<int:report_id>/view')
+    @login_required
+    def view_report(report_id):
+        """在线查看报告"""
+        try:
+            report = MonitorReport.query.get(report_id)
+            if not report or not os.path.exists(report.report_path):
+                return jsonify({'success': False, 'message': '报告文件不存在'})
+
+            return send_file(
+                report.report_path,
+                as_attachment=False,
+                mimetype='text/html',
+                download_name=f"{report.report_name}.html"
+            )
+
+        except Exception as e:
+            logger.error(f"在线查看报告失败: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
     
     @app.route('/api/reports/<int:report_id>', methods=['DELETE'])
     @login_required

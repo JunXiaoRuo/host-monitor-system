@@ -2449,6 +2449,9 @@ function renderReportsTable(reports) {
                 <td>${new Date(report.created_at).toLocaleString('zh-CN')}</td>
                 <td>${formatFileSize(report.server_count * 1024)}</td>
                 <td>
+                    <button class="btn btn-sm btn-outline-info me-1" onclick="viewReport(${report.id})" title="在线查看">
+                        <i class="bi bi-eye"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-primary me-1" onclick="downloadReport(${report.id})" title="下载">
                         <i class="bi bi-download"></i>
                     </button>
@@ -2475,6 +2478,11 @@ function formatFileSize(bytes) {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 在线查看报告
+function viewReport(reportId) {
+    window.open(`/api/reports/${reportId}/view`, '_blank');
 }
 
 // 下载报告

@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 class ReportGenerator:
     """HTML报告生成器"""
+
+    PROJECT_URL = "https://github.com/JunXiaoRuo/host-monitor-system"
     
     def __init__(self, report_dir: str = "reports"):
         self.report_dir = report_dir
@@ -82,13 +84,24 @@ class ReportGenerator:
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1f4f7a 0%, #2f6f68 100%);
             color: white;
-            padding: 30px;
+            padding: 34px;
             border-radius: 10px;
             margin-bottom: 30px;
-            text-align: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .header-title {
+            text-align: left;
         }
         
         .header h1 {
@@ -99,6 +112,24 @@ class ReportGenerator:
         .header p {
             font-size: 1.2em;
             opacity: 0.9;
+        }
+
+        .project-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            color: white;
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,0.55);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.12);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .project-link:hover {
+            background: rgba(255,255,255,0.2);
         }
         
         .summary {
@@ -409,12 +440,26 @@ class ReportGenerator:
         
         .footer {
             margin-top: 40px;
-            text-align: center;
             color: #6c757d;
-            padding: 20px;
+            padding: 22px 24px;
             background: white;
             border-radius: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .footer a {
+            color: #1f4f7a;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
         }
         
         .execution-time {
@@ -539,14 +584,32 @@ class ReportGenerator:
                 padding: 6px 4px;
                 word-break: break-word;
             }
+
+            .header-content,
+            .footer {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .project-link {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>主机巡视报告</h1>
-            <p>生成时间: {{ monitor_time }}</p>
+            <div class="header-content">
+                <div class="header-title">
+                    <h1>主机巡视报告</h1>
+                    <p>生成时间: {{ monitor_time }}</p>
+                </div>
+                <a class="project-link" href="{{ project_url }}" target="_blank" rel="noopener noreferrer">
+                    GitHub项目地址：host-monitor-system
+                </a>
+            </div>
         </div>
         
         <div class="summary">
@@ -818,8 +881,11 @@ class ReportGenerator:
         </div>
         
         <div class="footer">
-            <p>主机巡视系统自动生成</p>
-            <p class="execution-time">总执行时间: {{ "%.2f"|format(execution_time) }}秒</p>
+            <div>
+                <p>主机巡视系统自动生成</p>
+                <p class="execution-time">总执行时间: {{ "%.2f"|format(execution_time) }}秒</p>
+            </div>
+            <a href="{{ project_url }}" target="_blank" rel="noopener noreferrer">GitHub项目地址：host-monitor-system</a>
         </div>
     </div>
 </body>
@@ -840,6 +906,7 @@ class ReportGenerator:
         
         html_content = template.render(
             monitor_time=monitor_time,
+            project_url=self.PROJECT_URL,
             total_servers=monitor_data.get('total_servers', 0),
             success_count=monitor_data.get('success_count', 0),
             warning_count=monitor_data.get('warning_count', 0),
@@ -918,10 +985,43 @@ class ReportGenerator:
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1f4f7a 0%, #2f6f68 100%);
             color: white;
-            padding: 30px;
-            text-align: center;
+            padding: 34px;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .header-title {
+            text-align: left;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+        }
+
+        .project-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            color: white;
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,0.55);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.12);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .project-link:hover {
+            background: rgba(255,255,255,0.2);
         }
         
         .content {
@@ -969,17 +1069,56 @@ class ReportGenerator:
         
         .footer {
             background: #f8f9fa;
-            padding: 20px;
-            text-align: center;
+            padding: 22px 30px;
             color: #6c757d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .footer a {
+            color: #1f4f7a;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .header-content,
+            .footer {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .project-link {
+                width: 100%;
+                justify-content: center;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>主机巡视汇总报告</h1>
-            <p>统计期间: {{ start_date }} - {{ end_date }}</p>
+            <div class="header-content">
+                <div class="header-title">
+                    <h1>主机巡视汇总报告</h1>
+                    <p>统计期间: {{ start_date }} - {{ end_date }}</p>
+                </div>
+                <a class="project-link" href="{{ project_url }}" target="_blank" rel="noopener noreferrer">
+                    GitHub项目地址：host-monitor-system
+                </a>
+            </div>
         </div>
         
         <div class="content">
@@ -1030,8 +1169,11 @@ class ReportGenerator:
         </div>
         
         <div class="footer">
-            <p>报告生成时间: {{ generate_time }}</p>
-            <p>主机巡视系统自动生成</p>
+            <div>
+                <p>报告生成时间: {{ generate_time }}</p>
+                <p>主机巡视系统自动生成</p>
+            </div>
+            <a href="{{ project_url }}" target="_blank" rel="noopener noreferrer">GitHub项目地址：host-monitor-system</a>
         </div>
     </div>
 </body>
@@ -1051,6 +1193,7 @@ class ReportGenerator:
         html_content = template.render(
             start_date=start_date.strftime('%Y年%m月%d日'),
             end_date=end_date.strftime('%Y年%m月%d日'),
+            project_url=self.PROJECT_URL,
             total_servers=total_servers,
             total_checks=total_checks,
             avg_success_rate=avg_success_rate,
