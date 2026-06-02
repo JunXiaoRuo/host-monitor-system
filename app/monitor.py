@@ -194,10 +194,11 @@ class HostMonitor:
                 # 检查磁盘使用率告警
                 for disk in disk_info:
                     if disk['use_percent'] > thresholds['disk_threshold']:
+                        available_text = disk.get('available') or '未知'
                         monitor_result['alerts'].append({
                             'type': 'disk',
                             'level': 'warning',
-                            'message': f"磁盘 {disk['mounted_on']} 使用率过高: {disk['use_percent']:.2f}% (阈值: {thresholds['disk_threshold']}%)",
+                            'message': f"磁盘 {disk['mounted_on']} 使用率过高: {disk['use_percent']:.2f}% (阈值: {thresholds['disk_threshold']}%，剩余空间: {available_text})",
                             'value': disk['use_percent'],
                             'threshold': thresholds['disk_threshold'],
                             'filesystem': disk['filesystem'],

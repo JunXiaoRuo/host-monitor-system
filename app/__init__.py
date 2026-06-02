@@ -290,7 +290,8 @@ def create_app(config_object='config.Config'):
                             elif alert['type'] == 'memory':
                                 alert_details.append(f"内存告警: 内存使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%)")
                             elif alert['type'] == 'disk':
-                                alert_details.append(f"磁盘告警: 磁盘 {alert['mounted_on']} 使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%)")
+                                available_text = alert.get('available') or '未知'
+                                alert_details.append(f"磁盘告警: 磁盘 {alert['mounted_on']} 使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%，剩余空间: {available_text})")
                         
                         if alert_details or status['status'] == 'failed':
                             alerts_overview.append({
