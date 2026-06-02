@@ -955,8 +955,8 @@ class ServiceMonitorService:
         """
         try:
             from app.models import NotificationChannel
-            import requests
             import json
+            from app.webhook_http import sanitize_request_error, webhook_request
             
             # 获取所有启用的通知通道
             channels = NotificationChannel.query.filter_by(is_enabled=True).all()
@@ -973,7 +973,8 @@ class ServiceMonitorService:
                     if channel.method.upper() == 'GET':
                         # GET请求
                         params = {'message': final_content}
-                        response = requests.get(
+                        response = webhook_request(
+                            'GET',
                             channel.webhook_url,
                             params=params,
                             timeout=channel.timeout
@@ -987,7 +988,8 @@ class ServiceMonitorService:
                                 # 递归替换所有字符串值中的变量
                                 body = self._replace_variables_in_dict(body_template, final_content)
                                 headers = {'Content-Type': 'application/json'}
-                                response = requests.post(
+                                response = webhook_request(
+                                    'POST',
                                     channel.webhook_url,
                                     json=body,
                                     headers=headers,
@@ -1002,7 +1004,8 @@ class ServiceMonitorService:
                                 request_body = request_body.replace('报告下载链接:', '')
                                 # 清理多余的换行符
                                 request_body = request_body.replace('\n\n', '\n').strip()
-                                response = requests.post(
+                                response = webhook_request(
+                                    'POST',
                                     channel.webhook_url,
                                     data=request_body,
                                     timeout=channel.timeout
@@ -1011,7 +1014,8 @@ class ServiceMonitorService:
                             # 默认JSON格式
                             data = {'message': final_content}
                             headers = {'Content-Type': 'application/json'}
-                            response = requests.post(
+                            response = webhook_request(
+                                'POST',
                                 channel.webhook_url,
                                 json=data,
                                 headers=headers,
@@ -1026,7 +1030,7 @@ class ServiceMonitorService:
                         logger.warning(f"通知发送失败 - 通道: {channel.name}, 状态码: {response.status_code}")
                         
                 except Exception as e:
-                    logger.error(f"发送通知失败 - 通道: {channel.name}, 错误: {str(e)}")
+                    logger.error(f"发送通知失败 - 通道: {channel.name}, 错误: {sanitize_request_error(e, channel.webhook_url)}")
             
             message = f"通知发送完成，成功 {success_count}/{len(channels)} 个通道"
             return True, message

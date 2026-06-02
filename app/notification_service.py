@@ -9,6 +9,7 @@ from datetime import datetime
 from app.models import db, NotificationChannel, OSSConfig
 import logging
 from app.oss_service import OSSService
+from app.webhook_http import mask_webhook_url, sanitize_request_error, webhook_request
 
 logger = logging.getLogger(__name__)
 
@@ -309,7 +310,8 @@ class NotificationService:
             if channel.method.upper() == 'GET':
                 # GET请求，将内容作为参数发送
                 params = {'message': content}
-                response = requests.get(
+                response = webhook_request(
+                    'GET',
                     channel.webhook_url,
                     params=params,
                     timeout=channel.timeout
@@ -323,7 +325,8 @@ class NotificationService:
                         # 递归替换所有字符串值中的变量
                         body = self._replace_variables_in_dict(body_template, content, url)
                         headers = {'Content-Type': 'application/json'}
-                        response = requests.post(
+                        response = webhook_request(
+                            'POST',
                             channel.webhook_url,
                             json=body,
                             headers=headers,
@@ -334,7 +337,8 @@ class NotificationService:
                         request_body = channel.request_body.replace('#context#', content)
                         if url is not None:
                             request_body = request_body.replace('#url#', url)
-                        response = requests.post(
+                        response = webhook_request(
+                            'POST',
                             channel.webhook_url,
                             data=request_body,
                             timeout=channel.timeout
@@ -343,7 +347,8 @@ class NotificationService:
                     # 默认JSON格式
                     data = {'message': content}
                     headers = {'Content-Type': 'application/json'}
-                    response = requests.post(
+                    response = webhook_request(
+                        'POST',
                         channel.webhook_url,
                         json=data,
                         headers=headers,
@@ -359,7 +364,11 @@ class NotificationService:
                 return False
                 
         except requests.RequestException as e:
-            logger.error(f"网络请求失败 - 通道: {channel.name}, 错误: {str(e)}")
+            logger.error(
+                f"网络请求失败 - 通道: {channel.name}, "
+                f"URL: {mask_webhook_url(channel.webhook_url)}, "
+                f"错误: {sanitize_request_error(e, channel.webhook_url)}"
+            )
             return False
         except Exception as e:
             logger.error(f"发送通知异常 - 通道: {channel.name}, 错误: {str(e)}")
