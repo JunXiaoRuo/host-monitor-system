@@ -728,6 +728,10 @@ class ReportGenerator:
                     <strong>inode阈值</strong><br>
                     {{ thresholds.inode_threshold|default(90.0) }}%
                 </div>
+                <div class="threshold-item">
+                    <strong>密码过期提醒</strong><br>
+                    {{ thresholds.password_expiry_days|default(20) }}天
+                </div>
             </div>
         </div>
         
@@ -863,6 +867,40 @@ class ReportGenerator:
                                 {% endfor %}
                             </tbody>
                         </table>
+                    </div>
+                    {% endif %}
+
+                    {% if result.password_expiry_info %}
+                    <div class="detail-section">
+                        <h4>账号安全</h4>
+                        <div class="metrics-grid">
+                            <div class="metric">
+                                <span class="metric-label">用户</span>
+                                <span class="metric-value">{{ result.password_expiry_info.username or 'N/A' }}</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">密码过期时间</span>
+                                <span class="metric-value">{{ result.password_expiry_info.expires_at or '未知' }}</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">剩余天数</span>
+                                <span class="metric-value">
+                                    {% if result.password_expiry_info.status == 'never' %}
+                                        永不过期
+                                    {% elif result.password_expiry_info.status == 'expired' %}
+                                        已过期
+                                    {% elif result.password_expiry_info.days_remaining is not none %}
+                                        {{ result.password_expiry_info.days_remaining }}天
+                                    {% else %}
+                                        未知
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">状态</span>
+                                <span class="metric-value">{{ result.password_expiry_info.status or 'unknown' }}</span>
+                            </div>
+                        </div>
                     </div>
                     {% endif %}
                 </div>

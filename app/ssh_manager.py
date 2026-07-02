@@ -3,6 +3,7 @@ import socket
 import logging
 import time
 import threading
+import shlex
 from typing import Dict, Any, Optional, Tuple, List
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -943,3 +944,84 @@ class SSHConnectionManager:
             logger.error(f"获取磁盘使用情况失败: {str(e)}")
         
         return disk_info
+
+    def get_password_expiry(self, client: paramiko.SSHClient, username: str) -> Dict[str, Any]:
+        """
+        获取当前SSH用户的密码过期信息。
+        """
+        result_data = {
+            'username': username,
+            'expires_at': None,
+            'days_remaining': None,
+            'status': 'unknown',
+            'message': '',
+            'raw_output': ''
+        }
+
+        try:
+            inner_command = f"LC_ALL=C chage -l {shlex.quote(username)}"
+            command = f"/bin/sh -c {shlex.quote(inner_command)}"
+            result = self.execute_command(client, command, timeout=10)
+            output = (result.get('stdout') or '').strip()
+            error = (result.get('stderr') or '').strip()
+            result_data['raw_output'] = output
+
+            if not result.get('success'):
+                result_data['message'] = error or output or '无法获取密码过期信息'
+                return result_data
+
+            expires_value = None
+            for line in output.splitlines():
+                if ':' not in line:
+                    continue
+                key, value = line.split(':', 1)
+                if key.strip().lower() == 'password expires':
+                    expires_value = value.strip()
+                    break
+
+            if not expires_value:
+                result_data['message'] = '未找到密码过期字段'
+                return result_data
+
+            lower_value = expires_value.lower()
+            if lower_value == 'never':
+                result_data.update({
+                    'expires_at': 'never',
+                    'status': 'never',
+                    'message': '密码永不过期'
+                })
+                return result_data
+
+            if 'must be changed' in lower_value or lower_value in {'password must be changed', 'password must be changed'}:
+                result_data.update({
+                    'expires_at': 'expired',
+                    'days_remaining': 0,
+                    'status': 'expired',
+                    'message': '密码已过期'
+                })
+                return result_data
+
+            expires_date = None
+            for date_format in ('%b %d, %Y', '%Y-%m-%d'):
+                try:
+                    expires_date = datetime.strptime(expires_value, date_format).date()
+                    break
+                except ValueError:
+                    continue
+
+            if expires_date is None:
+                result_data['message'] = f'无法解析密码过期时间: {expires_value}'
+                return result_data
+
+            days_remaining = (expires_date - datetime.now().date()).days
+            result_data.update({
+                'expires_at': expires_date.isoformat(),
+                'days_remaining': days_remaining,
+                'status': 'expired' if days_remaining < 0 else 'normal',
+                'message': '密码已过期' if days_remaining < 0 else f'密码将在 {days_remaining} 天后过期'
+            })
+            return result_data
+
+        except Exception as e:
+            result_data['message'] = str(e)
+            return result_data

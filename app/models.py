@@ -53,6 +53,7 @@ class Threshold(db.Model):
     memory_threshold = db.Column(db.Float, default=80.0, comment='内存使用率阈值(%)')
     disk_threshold = db.Column(db.Float, default=80.0, comment='磁盘使用率阈值(%)')
     inode_threshold = db.Column(db.Float, default=90.0, comment='inode使用率阈值(%)')
+    password_expiry_days = db.Column(db.Integer, default=20, comment='密码过期提前提醒天数')
     created_at = db.Column(db.DateTime, default=get_local_time)
     updated_at = db.Column(db.DateTime, default=get_local_time, onupdate=get_local_time)
     
@@ -63,6 +64,7 @@ class Threshold(db.Model):
             'memory_threshold': self.memory_threshold,
             'disk_threshold': self.disk_threshold,
             'inode_threshold': self.inode_threshold,
+            'password_expiry_days': self.password_expiry_days,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -114,6 +116,7 @@ class MonitorLog(db.Model):
     memory_usage = db.Column(db.Float, comment='内存使用率')
     memory_info = db.Column(db.Text, comment='详细内存信息JSON')
     disk_info = db.Column(db.Text, comment='磁盘信息JSON')
+    password_expiry_info = db.Column(db.Text, comment='密码过期信息JSON')
     system_info = db.Column(db.Text, comment='系统信息JSON')
     alert_info = db.Column(db.Text, comment='告警信息JSON')
     error_message = db.Column(db.Text, comment='错误信息')
@@ -126,6 +129,14 @@ class MonitorLog(db.Model):
     
     def set_disk_info(self, disk_data):
         self.disk_info = json.dumps(disk_data)
+
+    def get_password_expiry_info(self):
+        if self.password_expiry_info:
+            return json.loads(self.password_expiry_info)
+        return {}
+
+    def set_password_expiry_info(self, password_expiry_data):
+        self.password_expiry_info = json.dumps(password_expiry_data)
     
     def get_memory_info(self):
         if self.memory_info:
@@ -163,6 +174,7 @@ class MonitorLog(db.Model):
             'memory_usage': self.memory_usage,
             'memory_info': self.get_memory_info(),
             'disk_info': self.get_disk_info(),
+            'password_expiry_info': self.get_password_expiry_info(),
             'system_info': self.get_system_info(),
             'alert_info': self.get_alert_info(),
             'error_message': self.error_message,

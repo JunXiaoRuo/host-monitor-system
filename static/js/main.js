@@ -500,6 +500,7 @@ function updateServerStatusList(serverStatus) {
                         }
                         return 'N/A';
                     })()}</small></div>
+                    <div class="col-md-2"><small>密码: ${formatPasswordExpiryStatus(status.password_expiry_info)}</small></div>
                     <div class="col-md-1"><small>告警: ${status.alert_count || 0}个</small></div>
                     <div class="col-md-2"><small>耗时: ${status.execution_time ? status.execution_time.toFixed(2) + 's' : 'N/A'}</small></div>
                     <div class="col-md-1"><small><button class="btn btn-sm btn-outline-secondary" onclick="toggleServerDetails('${serverId}')" title="展开详情"><i class="bi bi-chevron-down"></i></button></small></div>
@@ -641,12 +642,41 @@ function loadServerDiskDetails(serverId) {
 function renderServerDiskDetails(serverId, diskData) {
     const detailsDiv = document.getElementById(`server-details-${serverId}`);
     
-    if (!diskData || !diskData.disk_info || diskData.disk_info.length === 0) {
+    if (!diskData || ((!diskData.disk_info || diskData.disk_info.length === 0) && !diskData.password_expiry_info)) {
         detailsDiv.innerHTML = '<div class="text-muted">暂无磁盘信息</div>';
         return;
     }
     
-    let html = '<div class="mt-2"><h6>磁盘详情:</h6><div class="row">';
+    const passwordInfo = diskData.password_expiry_info || {};
+    let html = '<div class="mt-2">';
+    if (Object.keys(passwordInfo).length > 0) {
+        html += `
+            <div class="mb-2">
+                <h6>账号安全:</h6>
+                <div class="card card-sm">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${passwordInfo.username || 'N/A'}</strong>
+                                <br>
+                                <small class="text-muted">过期时间: ${passwordInfo.expires_at || '未知'}</small>
+                            </div>
+                            <div class="text-end">
+                                ${formatPasswordExpiryStatus(passwordInfo)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    html += '<h6>磁盘详情:</h6>';
+    if (!diskData.disk_info || diskData.disk_info.length === 0) {
+        html += '<div class="text-muted">暂无磁盘信息</div></div>';
+        detailsDiv.innerHTML = html;
+        return;
+    }
+    html += '<div class="row">';
     
     diskData.disk_info.forEach((disk, index) => {
         const usagePercent = disk.use_percent || 0;
@@ -2337,6 +2367,7 @@ function loadThresholds() {
                 const memoryThresholdElement = document.getElementById('memoryThreshold');
                 const diskThresholdElement = document.getElementById('diskThreshold');
                 const inodeThresholdElement = document.getElementById('inodeThreshold');
+                const passwordExpiryDaysElement = document.getElementById('passwordExpiryDays');
                 
                 if (cpuThresholdElement) {
                     cpuThresholdElement.value = data.data.cpu_threshold;
@@ -2349,6 +2380,9 @@ function loadThresholds() {
                 }
                 if (inodeThresholdElement) {
                     inodeThresholdElement.value = data.data.inode_threshold || 90;
+                }
+                if (passwordExpiryDaysElement) {
+                    passwordExpiryDaysElement.value = data.data.password_expiry_days || 20;
                 }
             } else {
                 showAlert('加载阈值配置失败: ' + data.message, 'danger');
@@ -2366,15 +2400,17 @@ function saveThresholds() {
         cpu_threshold: parseFloat(document.getElementById('cpuThreshold').value),
         memory_threshold: parseFloat(document.getElementById('memoryThreshold').value),
         disk_threshold: parseFloat(document.getElementById('diskThreshold').value),
-        inode_threshold: parseFloat(document.getElementById('inodeThreshold').value)
+        inode_threshold: parseFloat(document.getElementById('inodeThreshold').value),
+        password_expiry_days: parseInt(document.getElementById('passwordExpiryDays').value)
     };
     
     // 验证数据
     if (formData.cpu_threshold < 1 || formData.cpu_threshold > 100 ||
         formData.memory_threshold < 1 || formData.memory_threshold > 100 ||
         formData.disk_threshold < 1 || formData.disk_threshold > 100 ||
-        formData.inode_threshold < 1 || formData.inode_threshold > 100) {
-        showAlert('阈值必须在1-100之间', 'warning');
+        formData.inode_threshold < 1 || formData.inode_threshold > 100 ||
+        formData.password_expiry_days < 1 || formData.password_expiry_days > 365) {
+        showAlert('使用率阈值必须在1-100之间，密码过期提醒阈值必须在1-365天之间', 'warning');
         return;
     }
     
@@ -2505,6 +2541,26 @@ function formatFileSize(bytes) {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatPasswordExpiryStatus(info) {
+    if (!info || Object.keys(info).length === 0) {
+        return 'N/A';
+    }
+
+    if (info.status === 'never') {
+        return '<span class="text-success">永不过期</span>';
+    }
+    if (info.status === 'expired') {
+        return '<span class="text-danger fw-bold">已过期</span>';
+    }
+    if (info.status === 'warning') {
+        return `<span class="text-danger fw-bold">${info.days_remaining}天</span>`;
+    }
+    if (info.status === 'normal') {
+        return `<span>${info.days_remaining}天</span>`;
+    }
+    return '<span class="text-muted">未知</span>';
 }
 
 // 在线查看报告
@@ -2796,6 +2852,27 @@ function showLogDetailModal(logData) {
     } else {
         diskInfoHtml = '<p class="text-muted">无磁盘信息</p>';
     }
+
+    let accountSecurityHtml = '';
+    if (logData.password_expiry_info && Object.keys(logData.password_expiry_info).length > 0) {
+        const passwordInfo = logData.password_expiry_info;
+        accountSecurityHtml = `
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-shield-lock"></i> 账号安全</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-2">
+                        <div class="col-md-3"><strong>用户:</strong> ${passwordInfo.username || 'N/A'}</div>
+                        <div class="col-md-3"><strong>过期时间:</strong> ${passwordInfo.expires_at || '未知'}</div>
+                        <div class="col-md-3"><strong>剩余天数:</strong> ${formatPasswordExpiryStatus(passwordInfo)}</div>
+                        <div class="col-md-3"><strong>状态:</strong> ${passwordInfo.status || 'unknown'}</div>
+                    </div>
+                    ${passwordInfo.message ? `<small class="text-muted">${passwordInfo.message}</small>` : ''}
+                </div>
+            </div>
+        `;
+    }
     
     // 格式化系统信息
     let systemInfoHtml = '';
@@ -2953,7 +3030,8 @@ function showLogDetailModal(logData) {
                                 </div>
                             </div>
                         </div>
-                        
+                        ${accountSecurityHtml}
+
                         <!-- 磁盘信息 -->
                         <div class="card mb-4">
                             <div class="card-header">

@@ -33,6 +33,7 @@ class Config:
     DEFAULT_MEMORY_THRESHOLD = float(os.environ.get('DEFAULT_MEMORY_THRESHOLD') or 80.0)
     DEFAULT_DISK_THRESHOLD = float(os.environ.get('DEFAULT_DISK_THRESHOLD') or 80.0)
     DEFAULT_INODE_THRESHOLD = float(os.environ.get('DEFAULT_INODE_THRESHOLD') or 90.0)
+    DEFAULT_PASSWORD_EXPIRY_DAYS = int(os.environ.get('DEFAULT_PASSWORD_EXPIRY_DAYS') or 20)
     
     # 日志配置
     LOG_FILE = os.environ.get('LOG_FILE') or 'host_monitor.log'

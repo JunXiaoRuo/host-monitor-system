@@ -129,6 +129,7 @@ class HostMonitor:
             'cpu_usage': None,
             'memory_usage': None,
             'disk_info': [],
+            'password_expiry_info': {},
             'system_info': {},
             'alerts': [],
             'error_message': '',
@@ -154,6 +155,35 @@ class HostMonitor:
                 # 获取系统信息
                 system_info = self.ssh_manager.get_system_info(client)
                 monitor_result['system_info'] = system_info
+
+                # 获取当前SSH用户密码过期信息
+                password_expiry = self.ssh_manager.get_password_expiry(client, server.username)
+                password_expiry_days = thresholds.get('password_expiry_days', 20)
+                if password_expiry.get('status') == 'normal' and password_expiry.get('days_remaining') is not None:
+                    if password_expiry['days_remaining'] <= password_expiry_days:
+                        password_expiry['status'] = 'warning'
+                monitor_result['password_expiry_info'] = password_expiry
+
+                if password_expiry.get('status') == 'warning':
+                    monitor_result['alerts'].append({
+                        'type': 'password_expiry',
+                        'level': 'warning',
+                        'message': f"用户 {server.username} 密码将在 {password_expiry['days_remaining']} 天后过期 (过期时间: {password_expiry['expires_at']}，阈值: {password_expiry_days} 天)",
+                        'username': server.username,
+                        'expires_at': password_expiry.get('expires_at'),
+                        'days_remaining': password_expiry.get('days_remaining'),
+                        'threshold': password_expiry_days
+                    })
+                elif password_expiry.get('status') == 'expired':
+                    monitor_result['alerts'].append({
+                        'type': 'password_expiry',
+                        'level': 'warning',
+                        'message': f"用户 {server.username} 密码已过期 (过期时间: {password_expiry.get('expires_at')})",
+                        'username': server.username,
+                        'expires_at': password_expiry.get('expires_at'),
+                        'days_remaining': password_expiry.get('days_remaining'),
+                        'threshold': password_expiry_days
+                    })
                 
                 # 获取CPU使用率
                 cpu_usage = self.ssh_manager.get_cpu_usage(client)
@@ -277,6 +307,7 @@ class HostMonitor:
                     
                     # 设置复杂数据
                     monitor_log.set_disk_info(monitor_result['disk_info'])
+                    monitor_log.set_password_expiry_info(monitor_result.get('password_expiry_info', {}))
                     monitor_log.set_system_info(monitor_result['system_info'])
                     monitor_log.set_alert_info(monitor_result['alerts'])
                     
@@ -517,6 +548,7 @@ class HostMonitor:
                 status_dict = {}
                 for log in latest_logs:
                     disk_info = log.get_disk_info()
+                    password_expiry_info = log.get_password_expiry_info()
                     # 计算磁盘最大使用率
                     max_disk_usage = 0.0
                     max_inode_usage = None
@@ -534,6 +566,7 @@ class HostMonitor:
                         'cpu_usage': log.cpu_usage,
                         'memory_usage': log.memory_usage,
                         'disk_info': disk_info,
+                        'password_expiry_info': password_expiry_info,
                         'max_disk_usage': max_disk_usage,  # 添加磁盘最大使用率
                         'max_inode_usage': max_inode_usage,
                         'alert_count': len(log.get_alert_info()),

@@ -9,6 +9,7 @@ from app.scheduler import SchedulerService
 from app.report_generator import ReportGenerator
 from app.service_monitor import ServiceMonitorService
 from functools import wraps
+from sqlalchemy import text
 import logging
 import os
 from datetime import datetime, timedelta
@@ -26,12 +27,23 @@ def _ensure_threshold_schema(app):
         return
 
     try:
-        columns = {row[1] for row in db.session.execute(db.text("PRAGMA table_info(thresholds)")).fetchall()}
+        columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(thresholds)")).fetchall()}
         if 'inode_threshold' not in columns:
-            db.session.execute(db.text("ALTER TABLE thresholds ADD COLUMN inode_threshold FLOAT DEFAULT 90.0"))
-            db.session.execute(db.text("UPDATE thresholds SET inode_threshold = 90.0 WHERE inode_threshold IS NULL"))
+            db.session.execute(text("ALTER TABLE thresholds ADD COLUMN inode_threshold FLOAT DEFAULT 90.0"))
+            db.session.execute(text("UPDATE thresholds SET inode_threshold = 90.0 WHERE inode_threshold IS NULL"))
             db.session.commit()
             logger.info("已为阈值配置表添加 inode_threshold 字段")
+        if 'password_expiry_days' not in columns:
+            db.session.execute(text("ALTER TABLE thresholds ADD COLUMN password_expiry_days INTEGER DEFAULT 20"))
+            db.session.execute(text("UPDATE thresholds SET password_expiry_days = 20 WHERE password_expiry_days IS NULL"))
+            db.session.commit()
+            logger.info("已为阈值配置表添加 password_expiry_days 字段")
+
+        monitor_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(monitor_logs)")).fetchall()}
+        if 'password_expiry_info' not in monitor_columns:
+            db.session.execute(text("ALTER TABLE monitor_logs ADD COLUMN password_expiry_info TEXT"))
+            db.session.commit()
+            logger.info("已为监控日志表添加 password_expiry_info 字段")
     except Exception as e:
         db.session.rollback()
         logger.error(f"检查阈值配置表结构失败: {str(e)}")
@@ -98,7 +110,8 @@ def create_app(config_object='config.Config'):
                 cpu_threshold=app.config.get('DEFAULT_CPU_THRESHOLD', 80.0),
                 memory_threshold=app.config.get('DEFAULT_MEMORY_THRESHOLD', 80.0),
                 disk_threshold=app.config.get('DEFAULT_DISK_THRESHOLD', 80.0),
-                inode_threshold=app.config.get('DEFAULT_INODE_THRESHOLD', 90.0)
+                inode_threshold=app.config.get('DEFAULT_INODE_THRESHOLD', 90.0),
+                password_expiry_days=app.config.get('DEFAULT_PASSWORD_EXPIRY_DAYS', 20)
             )
             db.session.add(threshold)
             db.session.commit()
@@ -314,6 +327,8 @@ def create_app(config_object='config.Config'):
                             elif alert['type'] == 'inode':
                                 inode_available = alert.get('inode_available', '未知')
                                 alert_details.append(f"inode告警: 挂载点 {alert['mounted_on']} inode 使用率过高: {alert['value']:.2f}% (阈值: {alert['threshold']}%，剩余 inode: {inode_available})")
+                            elif alert['type'] == 'password_expiry':
+                                alert_details.append(f"密码过期告警: {alert.get('message', '密码即将过期')}")
                         
                         if alert_details or status['status'] == 'failed':
                             alerts_overview.append({
@@ -361,7 +376,8 @@ def create_app(config_object='config.Config'):
                     'success': True,
                     'data': {
                         'server_name': server.name,
-                        'disk_info': []
+                        'disk_info': [],
+                        'password_expiry_info': {}
                     }
                 })
             
@@ -377,6 +393,7 @@ def create_app(config_object='config.Config'):
                 'data': {
                     'server_name': server.name,
                     'disk_info': disk_data,
+                    'password_expiry_info': latest_log.get_password_expiry_info(),
                     'monitor_time': latest_log.monitor_time.isoformat() if latest_log.monitor_time else None
                 }
             })
