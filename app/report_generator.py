@@ -342,49 +342,67 @@ class ReportGenerator:
         .disk-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 6px;
             table-layout: fixed;
             max-width: 100%;
             overflow: hidden;
+            font-size: 0.86em;
+            line-height: 1.25;
         }
         
         .disk-table th,
         .disk-table td {
-            padding: 8px 12px;
+            padding: 4px 6px;
             border: 1px solid #dee2e6;
             text-align: left;
             word-wrap: break-word;
             overflow-wrap: break-word;
+            vertical-align: middle;
         }
         
         .disk-table th:nth-child(1),
         .disk-table td:nth-child(1) {
-            width: 25%;
+            width: 18%;
         }
         
         .disk-table th:nth-child(2),
         .disk-table td:nth-child(2) {
-            width: 20%;
+            width: 16%;
         }
         
         .disk-table th:nth-child(3),
         .disk-table td:nth-child(3) {
-            width: 15%;
+            width: 9%;
         }
         
         .disk-table th:nth-child(4),
         .disk-table td:nth-child(4) {
-            width: 15%;
+            width: 9%;
         }
         
         .disk-table th:nth-child(5),
         .disk-table td:nth-child(5) {
-            width: 15%;
+            width: 9%;
         }
         
         .disk-table th:nth-child(6),
         .disk-table td:nth-child(6) {
             width: 10%;
+        }
+
+        .disk-table th:nth-child(7),
+        .disk-table td:nth-child(7) {
+            width: 10%;
+        }
+
+        .disk-table th:nth-child(8),
+        .disk-table td:nth-child(8) {
+            width: 10%;
+        }
+
+        .disk-table th:nth-child(9),
+        .disk-table td:nth-child(9) {
+            width: 9%;
         }
         
         .disk-table th {
@@ -576,12 +594,12 @@ class ReportGenerator:
             }
             
             .disk-table {
-                font-size: 0.8em;
+                font-size: 0.75em;
             }
             
             .disk-table th,
             .disk-table td {
-                padding: 6px 4px;
+                padding: 4px 3px;
                 word-break: break-word;
             }
 
