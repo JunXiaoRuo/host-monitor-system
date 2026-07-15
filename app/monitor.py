@@ -10,8 +10,25 @@ from cryptography.fernet import Fernet
 import base64
 import threading
 import concurrent.futures
+from sqlalchemy.exc import OperationalError
 
 logger = logging.getLogger(__name__)
+
+def _is_sqlite_locked_error(error):
+    return 'database is locked' in str(error).lower()
+
+def _retry_sqlite_locked(operation, attempts=3, delay=0.2):
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            return operation()
+        except OperationalError as e:
+            if not _is_sqlite_locked_error(e):
+                raise
+            last_error = e
+            db.session.rollback()
+            time.sleep(delay * (attempt + 1))
+    raise last_error
 
 class HostMonitor:
     """主机巡视核心类"""
@@ -577,7 +594,7 @@ class HostMonitor:
                 return status_dict
             
             if has_app_context():
-                return _get_status()
+                return _retry_sqlite_locked(_get_status)
             else:
                 # 如果没有应用上下文，创建一个最小化的应用实例
                 from flask import Flask
@@ -590,7 +607,7 @@ class HostMonitor:
                 database.init_app(app)
                 
                 with app.app_context():
-                    return _get_status()
+                    return _retry_sqlite_locked(_get_status)
             
         except Exception as e:
             logger.error(f"获取最新服务器状态失败: {str(e)}")

@@ -23,6 +23,15 @@ class Config:
     # 数据库配置
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or f'sqlite:///{os.path.join(_basedir, "instance", "host_monitor.db")}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    if SQLALCHEMY_DATABASE_URI.startswith('sqlite'):
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'connect_args': {
+                'timeout': int(os.environ.get('SQLITE_BUSY_TIMEOUT') or 30),
+                'check_same_thread': False
+            }
+        }
+    else:
+        SQLALCHEMY_ENGINE_OPTIONS = {}
     
     # SSH配置
     SSH_TIMEOUT = int(os.environ.get('SSH_TIMEOUT') or 30)

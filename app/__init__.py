@@ -9,9 +9,11 @@ from app.scheduler import SchedulerService
 from app.report_generator import ReportGenerator
 from app.service_monitor import ServiceMonitorService
 from functools import wraps
-from sqlalchemy import text
+from sqlalchemy import event, text
+from sqlalchemy.exc import OperationalError
 import logging
 import os
+import time
 from datetime import datetime, timedelta
 import json
 
@@ -19,6 +21,40 @@ import json
 from log_config import setup_flask_app_logging
 
 logger = logging.getLogger(__name__)
+
+def _is_sqlite_locked_error(error):
+    return 'database is locked' in str(error).lower()
+
+def _retry_sqlite_locked(operation, attempts=3, delay=0.2):
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            return operation()
+        except OperationalError as e:
+            if not _is_sqlite_locked_error(e):
+                raise
+            last_error = e
+            db.session.rollback()
+            time.sleep(delay * (attempt + 1))
+    raise last_error
+
+def _configure_sqlite_engine(app):
+    """Configure SQLite for concurrent dashboard reads and monitor writes."""
+    db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    if not db_uri.startswith('sqlite'):
+        return
+
+    @event.listens_for(db.engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        except Exception as e:
+            logger.warning(f"SQLite并发优化配置失败，将使用默认模式: {str(e)}")
+        finally:
+            cursor.close()
 
 def _ensure_threshold_schema(app):
     """Add missing threshold columns for existing SQLite deployments."""
@@ -100,6 +136,7 @@ def create_app(config_object='config.Config'):
     
     with app.app_context():
         print("[STARTUP] 🔄 正在初始化数据库...")
+        _configure_sqlite_engine(app)
         # 创建数据库表
         db.create_all()
         _ensure_threshold_schema(app)
@@ -281,11 +318,11 @@ def create_app(config_object='config.Config'):
         """仪表板数据"""
         try:
             # 获取服务器统计
-            servers = server_service.get_active_servers()
+            servers = _retry_sqlite_locked(server_service.get_active_servers)
             total_servers = len(servers)
             
             # 获取最新服务器状态
-            server_status = host_monitor.get_latest_server_status()
+            server_status = _retry_sqlite_locked(host_monitor.get_latest_server_status)
             
             success_count = 0
             warning_count = 0
@@ -311,7 +348,12 @@ def create_app(config_object='config.Config'):
             for server_id, status in server_status.items():
                 if status['status'] in ['warning', 'failed']:
                     # 获取最新的监控日志以获取详细告警信息
-                    latest_log = MonitorLog.query.filter_by(server_id=server_id).order_by(MonitorLog.monitor_time.desc()).first()
+                    latest_log = _retry_sqlite_locked(
+                        lambda server_id=server_id: MonitorLog.query
+                        .filter_by(server_id=server_id)
+                        .order_by(MonitorLog.monitor_time.desc())
+                        .first()
+                    )
                     if latest_log:
                         alert_details = []
                         alert_info = latest_log.get_alert_info()
@@ -341,7 +383,7 @@ def create_app(config_object='config.Config'):
                             })
             
             # 获取服务总览数据
-            services_overview = service_monitor_service.get_services_overview()
+            services_overview = _retry_sqlite_locked(service_monitor_service.get_services_overview)
             
             return jsonify({
                 'success': True,
