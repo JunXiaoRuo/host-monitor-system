@@ -16,6 +16,7 @@ from app.ssh_manager import SSHConnectionManager
 from app.services import ServerService
 from app.notification_service import NotificationService
 from app.ssh_pool_health_checker import SSHPoolHealthChecker
+from app.sqlite_utils import run_sqlite_write
 
 logger = logging.getLogger(__name__)
 
@@ -82,45 +83,49 @@ class ServiceMonitorService:
             (success, message, service_config)
         """
         try:
-            # 验证必填字段
-            if not data.get('server_id'):
-                return False, "服务器ID不能为空", None
-            
-            if not data.get('service_name'):
-                return False, "服务名称不能为空", None
-            
-            if not data.get('process_name'):
-                return False, "进程名称不能为空", None
-            
-            # 验证服务器是否存在
-            server = Server.query.get(data['server_id'])
-            if not server:
-                return False, "服务器不存在", None
-            
-            # 检查同一服务器下是否已存在相同的服务名称
-            existing_service = ServiceConfig.query.filter_by(
-                server_id=data['server_id'],
-                service_name=data['service_name']
-            ).first()
-            if existing_service:
-                return False, "该服务器下已存在相同名称的服务", None
-            
-            # 创建服务配置
-            service_config = ServiceConfig(
-                server_id=data['server_id'],
-                service_name=data['service_name'],
-                process_name=data['process_name'],
-                is_monitoring=data.get('is_monitoring', True),
-                start_command=data.get('start_command', ''),
-                auto_restart=data.get('auto_restart', False),
-                description=data.get('description', '')
-            )
-            
-            db.session.add(service_config)
-            db.session.commit()
-            
-            logger.info(f"创建服务配置成功: {service_config.service_name}")
-            return True, "服务配置创建成功", service_config
+            def _create():
+                #FIX 20260921 将校验和提交放入同一个可重试事务  yyj
+                if not data.get('server_id'):
+                    return False, "服务器ID不能为空", None
+
+                if not data.get('service_name'):
+                    return False, "服务名称不能为空", None
+
+                if not data.get('process_name'):
+                    return False, "进程名称不能为空", None
+
+                server = Server.query.get(data['server_id'])
+                if not server:
+                    return False, "服务器不存在", None
+
+                existing_service = ServiceConfig.query.filter_by(
+                    server_id=data['server_id'],
+                    service_name=data['service_name']
+                ).first()
+                if existing_service:
+                    return False, "该服务器下已存在相同名称的服务", None
+
+                service_config = ServiceConfig(
+                    server_id=data['server_id'],
+                    service_name=data['service_name'],
+                    process_name=data['process_name'],
+                    is_monitoring=data.get('is_monitoring', True),
+                    start_command=data.get('start_command', ''),
+                    auto_restart=data.get('auto_restart', False),
+                    description=data.get('description', '')
+                )
+
+                db.session.add(service_config)
+                #FIX 20260921 保留原提交语句，改由事务重试函数执行  yyj
+                # db.session.commit()
+                #FIX 20260921 通过完整事务重试执行新的提交逻辑  yyj
+                db.session.commit()
+                return True, "服务配置创建成功", service_config
+
+            success, message, service_config = run_sqlite_write(_create)
+            if success and service_config:
+                logger.info(f"创建服务配置成功: {service_config.service_name}")
+            return success, message, service_config
             
         except Exception as e:
             db.session.rollback()
@@ -139,37 +144,42 @@ class ServiceMonitorService:
             (success, message, service_config)
         """
         try:
-            service_config = ServiceConfig.query.get(service_id)
-            if not service_config:
-                return False, "服务配置不存在", None
-            
-            # 检查服务名称冲突（如果修改了服务名称）
-            if 'service_name' in data and data['service_name'] != service_config.service_name:
-                existing_service = ServiceConfig.query.filter_by(
-                    server_id=service_config.server_id,
-                    service_name=data['service_name']
-                ).first()
-                if existing_service:
-                    return False, "该服务器下已存在相同名称的服务", None
-            
-            # 更新字段
-            if 'service_name' in data:
-                service_config.service_name = data['service_name']
-            if 'process_name' in data:
-                service_config.process_name = data['process_name']
-            if 'is_monitoring' in data:
-                service_config.is_monitoring = data['is_monitoring']
-            if 'start_command' in data:
-                service_config.start_command = data['start_command']
-            if 'auto_restart' in data:
-                service_config.auto_restart = data['auto_restart']
-            if 'description' in data:
-                service_config.description = data['description']
-            
-            db.session.commit()
-            
-            logger.info(f"更新服务配置成功: {service_config.service_name}")
-            return True, "服务配置更新成功", service_config
+            def _update():
+                service_config = ServiceConfig.query.get(service_id)
+                if not service_config:
+                    return False, "服务配置不存在", None
+
+                if 'service_name' in data and data['service_name'] != service_config.service_name:
+                    existing_service = ServiceConfig.query.filter_by(
+                        server_id=service_config.server_id,
+                        service_name=data['service_name']
+                    ).first()
+                    if existing_service:
+                        return False, "该服务器下已存在相同名称的服务", None
+
+                if 'service_name' in data:
+                    service_config.service_name = data['service_name']
+                if 'process_name' in data:
+                    service_config.process_name = data['process_name']
+                if 'is_monitoring' in data:
+                    service_config.is_monitoring = data['is_monitoring']
+                if 'start_command' in data:
+                    service_config.start_command = data['start_command']
+                if 'auto_restart' in data:
+                    service_config.auto_restart = data['auto_restart']
+                if 'description' in data:
+                    service_config.description = data['description']
+
+                #FIX 20260921 保留原提交语句，改由事务重试函数执行  yyj
+                # db.session.commit()
+                #FIX 20260921 通过完整事务重试执行新的提交逻辑  yyj
+                db.session.commit()
+                return True, "服务配置更新成功", service_config
+
+            success, message, service_config = run_sqlite_write(_update)
+            if success and service_config:
+                logger.info(f"更新服务配置成功: {service_config.service_name}")
+            return success, message, service_config
             
         except Exception as e:
             db.session.rollback()
@@ -187,23 +197,28 @@ class ServiceMonitorService:
             (success, message)
         """
         try:
-            service_config = ServiceConfig.query.get(service_id)
-            if not service_config:
-                return False, "服务配置不存在"
+            def _delete():
+                service_config = ServiceConfig.query.get(service_id)
+                if not service_config:
+                    return False, "服务配置不存在"
 
-            service_name = service_config.service_name
+                service_name = service_config.service_name
 
-            # 先批量删除监控日志，避免 ORM 级联逐条处理
-            ServiceMonitorLog.query.filter_by(service_config_id=service_id).delete(
-                synchronize_session=False
-            )
+                ServiceMonitorLog.query.filter_by(service_config_id=service_id).delete(
+                    synchronize_session=False
+                )
+                db.session.delete(service_config)
+                #FIX 20260921 保留原提交语句，改由事务重试函数执行  yyj
+                # db.session.commit()
+                #FIX 20260921 通过完整事务重试执行新的提交逻辑  yyj
+                db.session.commit()
+                return True, service_name
 
-            # 再删除服务配置
-            db.session.delete(service_config)
-            db.session.commit()
-
-            logger.info(f"删除服务配置成功: {service_name}")
-            return True, "服务配置删除成功"
+            success, result = run_sqlite_write(_delete)
+            if success:
+                logger.info(f"删除服务配置成功: {result}")
+                return True, "服务配置删除成功"
+            return False, result
 
         except Exception as e:
             db.session.rollback()
@@ -749,35 +764,33 @@ class ServiceMonitorService:
             监控日志对象
         """
         try:
-            monitor_log = ServiceMonitorLog(
-                service_config_id=result['service_id'],
-                status=result['status'],
-                process_count=result['process_count'],
-                error_message=result['error_message']
-            )
-            
-            monitor_log.set_process_info(result['process_info'])
-            
-            db.session.add(monitor_log)
-            
-            # 更新ServiceConfig的时间字段
-            service_config = ServiceConfig.query.get(result['service_id'])
-            if service_config:
-                # 更新最新监控时间
-                service_config.last_monitor_time = datetime.now()
-                
-                # 处理首次异常时间
-                if result['status'] in ['stopped', 'error', 'connection_failed']:
-                    # 异常状态，设置首次异常时间（如果还没有的话）
-                    if not service_config.first_error_time:
-                        service_config.first_error_time = datetime.now()
-                else:
-                    # 正常状态，清除首次异常时间
-                    service_config.first_error_time = None
-            
-            db.session.commit()
-            
-            return monitor_log
+            def _save():
+                monitor_log = ServiceMonitorLog(
+                    service_config_id=result['service_id'],
+                    status=result['status'],
+                    process_count=result['process_count'],
+                    error_message=result['error_message']
+                )
+
+                monitor_log.set_process_info(result['process_info'])
+                db.session.add(monitor_log)
+
+                service_config = ServiceConfig.query.get(result['service_id'])
+                if service_config:
+                    service_config.last_monitor_time = datetime.now()
+                    if result['status'] in ['stopped', 'error', 'connection_failed']:
+                        if not service_config.first_error_time:
+                            service_config.first_error_time = datetime.now()
+                    else:
+                        service_config.first_error_time = None
+
+                #FIX 20260921 保留原提交语句，改由事务重试函数执行  yyj
+                # db.session.commit()
+                #FIX 20260921 通过完整事务重试执行新的提交逻辑  yyj
+                db.session.commit()
+                return monitor_log
+
+            return run_sqlite_write(_save)
             
         except Exception as e:
             db.session.rollback()
@@ -1092,22 +1105,27 @@ class ServiceMonitorService:
             (success, message)
         """
         try:
-            setting = GlobalSettings.query.filter_by(setting_key=setting_key).first()
-            
-            if setting:
-                setting.setting_value = setting_value
-                if description:
-                    setting.description = description
-            else:
-                setting = GlobalSettings(
-                    setting_key=setting_key,
-                    setting_value=setting_value,
-                    description=description
-                )
-                db.session.add(setting)
-            
-            db.session.commit()
-            
+            def _set_setting():
+                setting = GlobalSettings.query.filter_by(setting_key=setting_key).first()
+
+                if setting:
+                    setting.setting_value = setting_value
+                    if description:
+                        setting.description = description
+                else:
+                    setting = GlobalSettings(
+                        setting_key=setting_key,
+                        setting_value=setting_value,
+                        description=description
+                    )
+                    db.session.add(setting)
+
+                #FIX 20260921 保留原提交语句，改由事务重试函数执行  yyj
+                # db.session.commit()
+                #FIX 20260921 通过完整事务重试执行新的提交逻辑  yyj
+                db.session.commit()
+
+            run_sqlite_write(_set_setting)
             logger.info(f"设置全局配置成功: {setting_key} = {setting_value}")
             return True, "设置保存成功"
             

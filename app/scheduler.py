@@ -7,7 +7,9 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import logging
 import json
+import os
 from typing import Dict, Any, List, Optional, Tuple
+from sqlalchemy import event
 from app.models import db, ScheduleTask
 from app.monitor import HostMonitor
 from app.report_generator import ReportGenerator
@@ -161,9 +163,33 @@ class SchedulerService:
             logger.info(f"开始初始化调度器，数据库URL: {self.database_url}")
             
             # 配置作业存储
-            jobstores = {
-                'default': SQLAlchemyJobStore(url=self.database_url)
-            }
+            jobstore_kwargs = {'url': self.database_url}
+            if self.database_url.startswith('sqlite'):
+                sqlite_timeout = int(os.environ.get('SQLITE_BUSY_TIMEOUT') or 30)
+                jobstore_kwargs['engine_options'] = {
+                    'connect_args': {
+                        'timeout': sqlite_timeout,
+                        'check_same_thread': False
+                    }
+                }
+
+            jobstore = SQLAlchemyJobStore(**jobstore_kwargs)
+            if self.database_url.startswith('sqlite'):
+                #FIX 20260921 为 APScheduler 独立 SQLite 连接启用并发参数  yyj
+                @event.listens_for(jobstore.engine, 'connect')
+                def _configure_jobstore_sqlite(dbapi_connection, connection_record):
+                    cursor = dbapi_connection.cursor()
+                    try:
+                        try:
+                            cursor.execute(f"PRAGMA busy_timeout={sqlite_timeout * 1000}")
+                            cursor.execute('PRAGMA journal_mode=WAL')
+                            cursor.execute('PRAGMA synchronous=NORMAL')
+                        except Exception as error:
+                            logger.warning(f"SQLite调度器连接并发配置失败，将使用默认模式: {error}")
+                    finally:
+                        cursor.close()
+
+            jobstores = {'default': jobstore}
             
             # 配置执行器
             executors = {

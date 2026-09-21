@@ -48,7 +48,13 @@ def _configure_sqlite_engine(app):
     def _set_sqlite_pragmas(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         try:
-            cursor.execute("PRAGMA busy_timeout=30000")
+            sqlite_timeout = app.config.get('SQLALCHEMY_ENGINE_OPTIONS', {}).get(
+                'connect_args', {}
+            ).get('timeout', 30)
+            #FIX 20260921 保留原固定等待时间配置，改为跟随 SQLite 超时配置  yyj
+            # cursor.execute("PRAGMA busy_timeout=30000")
+            #FIX 20260921 让主应用连接与环境变量 SQLITE_BUSY_TIMEOUT 保持一致  yyj
+            cursor.execute(f"PRAGMA busy_timeout={int(sqlite_timeout * 1000)}")
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA synchronous=NORMAL")
         except Exception as e:
