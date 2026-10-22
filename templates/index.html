@@ -192,6 +192,12 @@
                                 系统日志
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#configuration" onclick="showSection('configuration')">
+                                <i class="bi bi-arrow-down-up"></i>
+                                配置备份
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
@@ -958,6 +964,61 @@
                         <p class="mt-2">正在加载服务配置...</p>
                     </div>
                 </div>
+                <div id="configuration" class="section" style="display: none;">
+                    <h2 class="mb-3"><i class="bi bi-arrow-down-up"></i> 配置备份</h2>
+                    <p class="text-muted mb-4">备份范围：服务器、服务、计划任务、告警阈值、通知通道、OSS 和服务全局设置。</p>
+
+                    <div class="row g-3 border-top py-4">
+                        <div class="col-lg-3">
+                            <h3 class="h5">导出配置</h3>
+                            <span class="text-muted small">JSON 备份</span>
+                        </div>
+                        <div class="col-lg-9">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="configIncludePasswords" aria-describedby="configCredentialNotice">
+                                <label class="form-check-label" for="configIncludePasswords">包含服务器密码</label>
+                            </div>
+                            <p id="configPasswordNotice" class="text-danger small" hidden>服务器密码将以明文写入 JSON 文件。</p>
+                            <p id="configCredentialNotice" class="text-muted small">备份含通知 Webhook 和 OSS 凭据。私钥仅备份路径，不包含私钥文件。</p>
+                            <button class="btn btn-primary" id="configExportBtn" type="button">
+                                <i class="bi bi-download"></i> 导出全部配置
+                            </button>
+                            <div id="configExportStatus" class="small mt-3" role="status" aria-live="polite"></div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 border-top py-4">
+                        <div class="col-lg-3">
+                            <h3 class="h5">导入配置</h3>
+                            <span class="text-muted small">合并更新</span>
+                        </div>
+                        <div class="col-lg-9">
+                            <p class="small text-muted">匹配的配置将更新，其余新增；不删除本机配置。文件未包含的服务器密码保留原值。</p>
+                            <label for="configImportFile" class="form-label">配置文件</label>
+                            <input class="form-control mb-3" id="configImportFile" type="file" accept=".json,application/json" aria-describedby="configImportStatus">
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <button class="btn btn-outline-primary" id="configPreviewBtn" type="button">
+                                    <i class="bi bi-file-earmark-check"></i> 校验文件
+                                </button>
+                                <button class="btn btn-primary" id="configImportBtn" type="button" disabled>
+                                    <i class="bi bi-upload"></i> 确认导入
+                                </button>
+                            </div>
+                            <div id="configImportStatus" class="small mb-3" role="status" aria-live="polite"></div>
+                            <div id="configImportPreview" hidden>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle">
+                                        <thead><tr><th scope="col">配置类型</th><th scope="col" class="text-end">新增</th><th scope="col" class="text-end">更新</th></tr></thead>
+                                        <tbody id="configImportSummary"></tbody>
+                                    </table>
+                                </div>
+                                <p id="configMissingPasswords" class="text-warning small" hidden></p>
+                                <div id="configImportWarnings" class="text-warning small" role="status"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="small text-muted border-top pt-3">备份不包含历史日志、报告、管理员账户和 .env 环境配置。</p>
+                </div>
             </main>
         </div>
     </div>
@@ -1087,5 +1148,6 @@
     
     <!-- 自定义 JavaScript -->
     <script src="/static/js/main.js"></script>
+    <script src="{{ url_for('static', filename='js/config-transfer.js') }}"></script>
 </body>
 </html>

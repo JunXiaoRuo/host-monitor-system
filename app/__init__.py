@@ -8,6 +8,7 @@ from app.monitor import HostMonitor
 from app.scheduler import SchedulerService
 from app.report_generator import ReportGenerator
 from app.service_monitor import ServiceMonitorService
+from app.config_transfer import register_config_transfer_routes
 from functools import wraps
 from sqlalchemy import event, text
 from sqlalchemy.exc import OperationalError
@@ -199,6 +200,10 @@ def create_app(config_object='config.Config'):
             return f(*args, **kwargs)
         return decorated_function
     
+    register_config_transfer_routes(
+        app, login_required, server_service, scheduler_service, service_monitor_service
+    )
+
     # 认证相关路由
     @app.route('/login')
     def login():
