@@ -31,8 +31,8 @@ class ServerService:
                     # Fernet密钥必须是base64编码的44字符字符串
                     import base64
                     try:
-                        # 验证是否为有效的base64编码
-                        decoded_key = base64.b64decode(encryption_key)
+                        # 验证是否为有效的base64编码，兼容 urlsafe 密钥（含 - 和 _）
+                        decoded_key = base64.urlsafe_b64decode(encryption_key)
                         # 验证解码后的长度是否为32字节（Fernet要求）
                         if len(decoded_key) == 32:
                             # 返回原始的base64编码字符串，不是解码后的bytes
@@ -52,7 +52,7 @@ class ServerService:
         if encryption_key:
             import base64
             try:
-                decoded_key = base64.b64decode(encryption_key)
+                decoded_key = base64.urlsafe_b64decode(encryption_key)
                 if len(decoded_key) == 32:
                     # 返回原始的base64编码字符串，不是解码后的bytes
                     return encryption_key.encode()
